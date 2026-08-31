@@ -1,0 +1,44 @@
+# Every push: does it still typecheck, build, and does the Rust side compile.
+name: ci
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+      # The server has no build step, so a syntax check is the whole test.
+      - name: Check the sync server parses
+        run: |
+          node --check server/index.mjs
+          node --check scripts/latest-json.mjs
+          node --check scripts/publish-release.mjs
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: System libraries for the webview
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libxdo-dev libssl-dev \
+            libayatana-appindicator3-dev librsvg2-dev
+
+      - run: cargo check --manifest-path src-tauri/Cargo.toml

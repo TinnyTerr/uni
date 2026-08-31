@@ -19,6 +19,10 @@ npm test           # the sync reconciliation checks
 npm run typecheck
 ```
 
+`npm run dist` builds whatever the machine you are on can build — `.deb` and
+`.AppImage` on Linux, an NSIS `.exe` and an `.msi` on Windows. Tauri ignores the
+targets that do not apply, so the same config covers both.
+
 System packages needed once, on Ubuntu/Debian:
 
 ```bash
@@ -100,7 +104,8 @@ repoint your desktop or push filesystem paths at it.
 The desktop app checks the repository's releases and installs signed updates
 in place: **Settings → Updates**. Builds are verified against a public key
 compiled into the app, so an update can only come from a build signed with your
-private key.
+private key. Linux updates arrive as the AppImage, Windows as the NSIS
+installer running in passive mode.
 
 Cutting a release:
 
@@ -110,9 +115,23 @@ git commit -am "release 0.2.0"
 git tag v0.2.0 && git push --follow-tags
 ```
 
-The tag triggers `.gitea/workflows/release.yml`, which builds the Linux bundles,
-signs them, writes the `latest.json` manifest, attaches the PWA bundle, and
-repoints the floating `latest` release that installed copies check against.
+The tag triggers `.gitea/workflows/release.yml`, in three stages:
+
+1. **prepare** — checks the tag agrees with all three manifests, then opens the
+   release. Doing this once, up front, is what stops the two build jobs racing
+   each other to create it.
+2. **build** — a matrix over `ubuntu-latest` and `windows-latest`. Each builds
+   and signs its own bundles and attaches them, signatures included, to that
+   release. `fail-fast` is off, so one platform failing does not deny the other
+   its release.
+3. **manifest** — collects every signature back off the release, composes the
+   `latest.json` that covers both platforms, and repoints the floating `latest`
+   release that installed copies check against. It runs even if one build
+   failed, so a working platform still ships.
+
+The Windows job needs a Windows runner registered with your Gitea instance. If
+there isn't one it will sit queued rather than fail — the Linux build and the
+manifest still complete, and the manifest simply won't carry a Windows entry.
 
 It needs three secrets on the repository:
 
@@ -222,9 +241,10 @@ src-tauri/src/
 server/
   index.mjs           serves the PWA and holds the authoritative document
 scripts/
-  bump-version.mjs    one version into all three manifests
-  latest-json.mjs     updater manifest from the signed build artefacts
-  publish-release.mjs creates the release and attaches the files
+  bump-version.mjs      one version into all three manifests
+  collect-artifacts.mjs flattens a platform's bundles into one directory
+  latest-json.mjs       updater manifest from the signed build artefacts
+  publish-release.mjs   opens the release, attaches files, collects signatures
 tests/
   sync.check.ts       the reconciliation primitives, no browser needed
 ```

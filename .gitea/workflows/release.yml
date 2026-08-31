@@ -1,17 +1,21 @@
 # Cutting a release.
 #
-#   npm version 0.2.0            # bumps package.json
-#   scripts/bump-version.mjs     # keeps Cargo.toml + tauri.conf.json in step
-#   git tag v0.2.0 && git push --tags
+#   npm run release 0.2.0        # one version into all three manifests
+#   git commit -am "release 0.2.0"
+#   git tag v0.2.0 && git push --follow-tags
 #
-# The tag build produces the Linux bundles, signs them with the updater key,
-# writes the manifest that installed copies check against, and attaches the
-# built PWA so the sync server can be deployed from the same artefacts.
+# Linux and Windows bundles are built on their own runners and attached to one
+# release, then a final job composes the updater manifest from every signature
+# on it. That ordering matters: the manifest has to describe both platforms, and
+# neither runner can see the other's artefacts.
 #
 # Secrets this needs on the repo:
 #   TAURI_SIGNING_PRIVATE_KEY           contents of ~/.tauri/uni-schedule.key
 #   TAURI_SIGNING_PRIVATE_KEY_PASSWORD  the password for it (empty if none)
 #   RELEASE_TOKEN                       Gitea token with write access (or reuse GITEA_TOKEN)
+#
+# The Windows job needs a Windows runner registered with Gitea. Without one it
+# will sit queued; the Linux build and the manifest still complete on their own.
 name: release
 
 on:
@@ -23,16 +27,20 @@ on:
         description: 'Tag to build and publish, e.g. v0.2.0'
         required: true
 
-env:
-  NODE_VERSION: '20'
+defaults:
+  run:
+    shell: bash
 
 jobs:
-  release:
+  # Creating the release up front is what lets two build jobs attach to it
+  # without racing each other to create it first.
+  prepare:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.v.outputs.tag }}
+      version: ${{ steps.v.outputs.version }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Work out the version
         id: v
@@ -42,7 +50,7 @@ jobs:
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
       # A tag that disagrees with the manifests would ship an app that reports
-      # the wrong version and never sees itself as out of date.
+      # the wrong version and so never sees itself as out of date.
       - name: Check the version matches the manifests
         run: |
           WANT="${{ steps.v.outputs.version }}"
@@ -53,9 +61,34 @@ jobs:
           GOT=$(grep -m1 '^version' src-tauri/Cargo.toml | cut -d'"' -f2)
           [ "$GOT" = "$WANT" ] || { echo "Cargo.toml says $GOT, tag says $WANT"; exit 1; }
 
+      - name: Open the release
+        env:
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITEA_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          node scripts/publish-release.mjs \
+            --tag "${{ steps.v.outputs.tag }}" \
+            --title "Uni Schedule ${{ steps.v.outputs.version }}" \
+            --notes "Desktop builds for Linux and Windows, plus the PWA bundle for the sync server." \
+            --ensure
+
+  build:
+    needs: prepare
+    # One platform failing should not deny the other its release.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            bundles: deb,appimage
+          - os: windows-latest
+            bundles: nsis,msi
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version: '20'
           cache: npm
 
       - uses: dtolnay/rust-toolchain@stable
@@ -63,8 +96,11 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          key: ${{ matrix.os }}
 
+      # Windows brings its own webview; only Linux needs the system libraries.
       - name: System libraries for the webview
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
@@ -73,57 +109,70 @@ jobs:
             build-essential curl wget file libglib2.0-dev
 
       - run: npm ci
-
       - run: npm run typecheck
-
       - run: npm test
 
-      # The desktop bundles. `tauri.release.conf.json` is what turns on the
-      # signed updater artifacts, which a local build has no key for.
+      # `tauri.release.conf.json` is what turns on the signed updater
+      # artefacts, which a local build has no key for.
       - name: Build the desktop app
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: npx tauri build --config src-tauri/tauri.release.conf.json
+        run: npx tauri build --config src-tauri/tauri.release.conf.json --bundles ${{ matrix.bundles }}
 
-      - name: Collect the artefacts
-        id: pack
+      # Node rather than find/cp, so this step does not assume the Windows
+      # runner has bash and the GNU tools on its PATH.
+      - name: Collect this platform's artefacts
+        run: node scripts/collect-artifacts.mjs out
+
+      # The web app and the server that hands it to phones, built once.
+      - name: Package the PWA
+        if: runner.os == 'Linux'
         run: |
-          mkdir -p out
-          find src-tauri/target/release/bundle -type f \
-            \( -name '*.deb' -o -name '*.AppImage' -o -name '*.rpm' \) \
-            -exec cp {} out/ \;
-          # The PWA the sync server hands to phones, plus the server itself.
-          tar czf "out/uni-schedule-pwa-${{ steps.v.outputs.version }}.tar.gz" \
-            dist server scripts/latest-json.mjs package.json
-          ls -la out
+          npm run build
+          tar czf "out/uni-schedule-pwa-${{ needs.prepare.outputs.version }}.tar.gz" \
+            dist server scripts package.json README.md
+
+      - name: Attach them to the release
+        env:
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITEA_TOKEN || secrets.GITHUB_TOKEN }}
+        run: node scripts/publish-release.mjs --tag "${{ needs.prepare.outputs.tag }}" --dir out
+
+  manifest:
+    needs: [prepare, build]
+    # Runs even if one platform failed, so a working build still ships.
+    if: always() && needs.prepare.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Gather every signature on the release
+        env:
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITEA_TOKEN || secrets.GITHUB_TOKEN }}
+        run: node scripts/publish-release.mjs --tag "${{ needs.prepare.outputs.tag }}" --download-sigs sigs
 
       - name: Write the updater manifest
         run: |
           node scripts/latest-json.mjs \
-            "${{ github.server_url }}/${{ github.repository }}/releases/download/${{ steps.v.outputs.tag }}" \
-            "Uni Schedule ${{ steps.v.outputs.version }}" > out/latest.json
-          cat out/latest.json
+            --base-url "${{ github.server_url }}/${{ github.repository }}/releases/download/${{ needs.prepare.outputs.tag }}" \
+            --dir sigs \
+            --notes "Uni Schedule ${{ needs.prepare.outputs.version }}" > latest.json
+          cat latest.json
 
-      - name: Publish the release
+      # Installed copies poll one fixed URL, so `latest` is repointed at the new
+      # manifest rather than the endpoint changing every release.
+      - name: Publish it, and point `latest` at this build
         env:
           RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITEA_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
-          node scripts/publish-release.mjs \
-            --tag "${{ steps.v.outputs.tag }}" \
-            --title "Uni Schedule ${{ steps.v.outputs.version }}" \
-            --notes "Desktop bundles for Linux, plus the PWA bundle for the sync server." \
-            out/*
-
-      # Installed copies poll one fixed URL, so `latest` is repointed at the
-      # new manifest rather than the endpoint changing every release.
-      - name: Point `latest` at this build
-        env:
-          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITEA_TOKEN || secrets.GITHUB_TOKEN }}
-        run: |
+          node scripts/publish-release.mjs --tag "${{ needs.prepare.outputs.tag }}" latest.json
           node scripts/publish-release.mjs \
             --tag latest \
             --title "Latest update manifest" \
-            --notes "Points at ${{ steps.v.outputs.tag }}. Fetched by installed copies to check for updates." \
+            --notes "Points at ${{ needs.prepare.outputs.tag }}. Fetched by installed copies to check for updates." \
             --recreate \
-            out/latest.json
+            latest.json

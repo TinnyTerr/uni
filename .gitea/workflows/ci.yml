@@ -26,8 +26,7 @@ jobs:
       - name: Check the sync server parses
         run: |
           node --check server/index.mjs
-          node --check scripts/latest-json.mjs
-          node --check scripts/publish-release.mjs
+          for f in scripts/*.mjs; do node --check "$f"; done
 
       - uses: dtolnay/rust-toolchain@stable
       - uses: swatinem/rust-cache@v2

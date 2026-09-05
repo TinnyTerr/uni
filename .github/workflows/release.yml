@@ -12,10 +12,11 @@
 # Secrets this needs on the repo:
 #   TAURI_SIGNING_PRIVATE_KEY           contents of ~/.tauri/uni-schedule.key
 #   TAURI_SIGNING_PRIVATE_KEY_PASSWORD  the password for it (empty if none)
-#   RELEASE_TOKEN                       Gitea token with write access (or reuse GITEA_TOKEN)
 #
-# The Windows job needs a Windows runner registered with Gitea. Without one it
-# will sit queued; the Linux build and the manifest still complete on their own.
+# Release plumbing goes through the `gh` CLI, which is preinstalled on GitHub's
+# runners and authenticates with the automatic GITHUB_TOKEN, so no release PAT
+# is needed. (scripts/publish-release.mjs speaks Gitea's /api/v1 REST shape and
+# is not used here.)
 name: release
 
 on:
@@ -30,6 +31,9 @@ on:
 defaults:
   run:
     shell: bash
+
+permissions:
+  contents: write
 
 jobs:
   # Creating the release up front is what lets two build jobs attach to it
@@ -63,13 +67,12 @@ jobs:
 
       - name: Open the release
         env:
-          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITEA_TOKEN || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          node scripts/publish-release.mjs \
-            --tag "${{ steps.v.outputs.tag }}" \
+          TAG="${{ steps.v.outputs.tag }}"
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" \
             --title "Uni Schedule ${{ steps.v.outputs.version }}" \
-            --notes "Desktop builds for Linux and Windows, plus the PWA bundle for the sync server." \
-            --ensure
+            --notes "Desktop builds for Linux and Windows, plus the PWA bundle for the sync server."
 
   build:
     needs: prepare
@@ -135,8 +138,8 @@ jobs:
 
       - name: Attach them to the release
         env:
-          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITEA_TOKEN || secrets.GITHUB_TOKEN }}
-        run: node scripts/publish-release.mjs --tag "${{ needs.prepare.outputs.tag }}" --dir out
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ needs.prepare.outputs.tag }}" out/* --clobber
 
   manifest:
     needs: [prepare, build]
@@ -152,8 +155,8 @@ jobs:
 
       - name: Gather every signature on the release
         env:
-          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITEA_TOKEN || secrets.GITHUB_TOKEN }}
-        run: node scripts/publish-release.mjs --tag "${{ needs.prepare.outputs.tag }}" --download-sigs sigs
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release download "${{ needs.prepare.outputs.tag }}" --dir sigs --pattern '*.sig'
 
       - name: Write the updater manifest
         run: |
@@ -167,12 +170,10 @@ jobs:
       # manifest rather than the endpoint changing every release.
       - name: Publish it, and point `latest` at this build
         env:
-          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITEA_TOKEN || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          node scripts/publish-release.mjs --tag "${{ needs.prepare.outputs.tag }}" latest.json
-          node scripts/publish-release.mjs \
-            --tag latest \
+          gh release upload "${{ needs.prepare.outputs.tag }}" latest.json --clobber
+          gh release delete latest --yes --cleanup-tag 2>/dev/null || true
+          gh release create latest latest.json \
             --title "Latest update manifest" \
-            --notes "Points at ${{ needs.prepare.outputs.tag }}. Fetched by installed copies to check for updates." \
-            --recreate \
-            latest.json
+            --notes "Points at ${{ needs.prepare.outputs.tag }}. Fetched by installed copies to check for updates."

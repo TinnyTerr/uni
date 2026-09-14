@@ -1,7 +1,8 @@
 {
-  "$schema": "https://schema.tauri.app/config/2",
-  "//": "Merged over tauri.conf.json in CI only: `tauri build --config src-tauri/tauri.release.conf.json`. Producing updater artifacts requires the signing key, which a local build has no reason to need.",
-  "bundle": {
-    "createUpdaterArtifacts": true
-  }
+    "$schema": "https://schema.tauri.app/config/2",
+    "bundle": {
+        "createUpdaterArtifacts": true
+    },
+    "identifier": "com.tinnyterr.uni",
+    "productName": "Uni"
 }

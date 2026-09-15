@@ -16,6 +16,23 @@ const STATUSES: { id: AssessmentStatus; label: string }[] = [
 
 type Filter = 'open' | 'all' | 'done';
 
+/** Default draft for a new assessment; used by the Assessments page and the calendar's quick-add. */
+export function blankAssessment(moduleId: string, due?: Date, kind: AssessmentKind = 'Coursework'): Assessment {
+  const base = due ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  return {
+    id: uid(),
+    moduleId,
+    title: '',
+    kind,
+    due: iso(new Date(base.getFullYear(), base.getMonth(), base.getDate(), due ? base.getHours() : 16, due ? base.getMinutes() : 0)),
+    weight: 100,
+    status: 'todo',
+    mark: null,
+    description: '',
+    notes: [],
+  };
+}
+
 export default function Assessments() {
   const { state, update } = useStore();
   const { year, modules, assessments } = useActiveYear();
@@ -31,18 +48,7 @@ export default function Assessments() {
       .sort((a, b) => parse(a.due).getTime() - parse(b.due).getTime());
   }, [assessments, filter]);
 
-  const blank = (): Assessment => ({
-    id: uid(),
-    moduleId: modules[0]?.id ?? '',
-    title: '',
-    kind: 'Coursework',
-    due: iso(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7, 16, 0)),
-    weight: 100,
-    status: 'todo',
-    mark: null,
-    description: '',
-    notes: [],
-  });
+  const blank = (): Assessment => blankAssessment(modules[0]?.id ?? '');
 
   if (!year) return <Empty title="No academic year">Create one in Settings first.</Empty>;
   if (!modules.length) return <Empty title="Add a module first">Every assessment belongs to a module.</Empty>;
@@ -157,7 +163,7 @@ export default function Assessments() {
   );
 }
 
-function AssessmentEditor({
+export function AssessmentEditor({
   assessment,
   isNew,
   onClose,

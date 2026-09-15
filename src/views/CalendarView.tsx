@@ -8,10 +8,12 @@ import {
   startOfMonth,
   startOfWeek,
 } from 'date-fns';
-import { useStore } from '../lib/store';
+import { useActiveYear, useStore } from '../lib/store';
 import { occurrencesByDay, type Occurrence } from '../lib/occurrences';
 import { DAY_SHORT, WEEK_OPTS, monthGrid, termContaining, termWeek, weekGrid, ymd } from '../lib/dates';
+import type { Assessment } from '../lib/types';
 import { EventEditor } from './EventEditor';
+import { AssessmentEditor, blankAssessment } from './Assessments';
 
 type Mode = 'month' | 'week';
 
@@ -21,10 +23,12 @@ const DAY_END = 22;
 
 export default function CalendarView() {
   const { state } = useStore();
+  const { modules } = useActiveYear();
   const [mode, setMode] = useState<Mode>('week');
   const [cursor, setCursor] = useState(new Date());
   const [selected, setSelected] = useState<Date>(new Date());
   const [editing, setEditing] = useState<{ id: string | null; day?: Date } | null>(null);
+  const [editingAssessment, setEditingAssessment] = useState<Assessment | null>(null);
 
   const days = useMemo(() => (mode === 'month' ? monthGrid(cursor) : weekGrid(cursor)), [mode, cursor]);
   const byDay = useMemo(() => occurrencesByDay(state, days), [state, days]);
@@ -34,6 +38,14 @@ export default function CalendarView() {
 
   const term = termContaining(state.terms, cursor);
   const week = term ? termWeek(term, mode === 'month' ? startOfMonth(cursor) : cursor) : null;
+
+  const openOccurrence = (o: Occurrence) => {
+    if (o.kind === 'event') setEditing({ id: o.refId });
+    if (o.kind === 'deadline') {
+      const a = state.assessments.find((x) => x.id === o.refId);
+      if (a) setEditingAssessment(a);
+    }
+  };
 
   return (
     <div className="week-wrap">
@@ -72,6 +84,14 @@ export default function CalendarView() {
         <button className="btn primary sm" onClick={() => setEditing({ id: null, day: selected })}>
           + Event
         </button>
+        <button
+          className="btn primary sm"
+          disabled={!modules.length}
+          title={modules.length ? '' : 'Add a module first'}
+          onClick={() => setEditingAssessment(blankAssessment(modules[0]?.id ?? '', selected, 'Exam'))}
+        >
+          + Test/Exam
+        </button>
       </div>
 
       {mode === 'month' ? (
@@ -84,11 +104,11 @@ export default function CalendarView() {
             setSelected(d);
             setCursor(d);
           }}
-          onOpen={(o) => o.kind === 'event' && setEditing({ id: o.refId })}
+          onOpen={(o) => openOccurrence(o)}
           onAdd={(d) => setEditing({ id: null, day: d })}
         />
       ) : (
-        <WeekView days={days} byDay={byDay} onOpen={(o) => o.kind === 'event' && setEditing({ id: o.refId })} />
+        <WeekView days={days} byDay={byDay} onOpen={(o) => openOccurrence(o)} />
       )}
 
       {editing && (
@@ -96,6 +116,13 @@ export default function CalendarView() {
           eventId={editing.id}
           day={editing.day}
           onClose={() => setEditing(null)}
+        />
+      )}
+      {editingAssessment && (
+        <AssessmentEditor
+          assessment={editingAssessment}
+          isNew={!state.assessments.some((a) => a.id === editingAssessment.id)}
+          onClose={() => setEditingAssessment(null)}
         />
       )}
     </div>

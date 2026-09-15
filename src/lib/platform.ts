@@ -31,6 +31,18 @@ export function deviceId(): string {
   }
 }
 
+/**
+ * When the phone loaded this app *from* the server (rather than a home-screen
+ * PWA opened separately), the browser's own address bar already has it — no
+ * point making the user retype what they just typed to get here.
+ */
+export function currentOrigin(): string | null {
+  if (isTauri()) return null;
+  if (typeof location === 'undefined') return null;
+  if (location.protocol !== 'http:' && location.protocol !== 'https:') return null;
+  return location.origin;
+}
+
 /** A first guess at a human name for this device, editable in Settings. */
 export function guessDeviceName(): string {
   if (isTauri()) return 'Desktop';

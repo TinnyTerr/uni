@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { useStore } from '../lib/store';
 import { Field } from '../components/ui';
-import { deviceId, guessDeviceName, isTauri } from '../lib/platform';
+import { currentOrigin, deviceId, guessDeviceName, isTauri } from '../lib/platform';
 import { clearBookmark, health, normaliseUrl, type Health } from '../lib/sync';
 import type { ConflictPolicy } from '../lib/types';
 
@@ -43,6 +43,7 @@ function ago(iso: string | null): string {
 export default function SyncSettings() {
   const { state, update, sync, syncNow } = useStore();
   const cfg = state.settings.server;
+  const origin = currentOrigin();
 
   const [probe, setProbe] = useState<Health | null>(null);
   const [probing, setProbing] = useState(false);
@@ -119,16 +120,31 @@ export default function SyncSettings() {
 
       <div className="row">
         <Field label="Server address" hint="host:port, or a full URL">
-          <input
-            className="mono"
-            placeholder="http://192.168.1.20:4173"
-            value={cfg.url}
-            onChange={(e) =>
-              update((s) => {
-                s.settings.server.url = e.target.value;
-              })
-            }
-          />
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input
+              className="mono"
+              placeholder="http://192.168.1.20:4173"
+              value={cfg.url}
+              onChange={(e) =>
+                update((s) => {
+                  s.settings.server.url = e.target.value;
+                })
+              }
+            />
+            {origin && normaliseUrl(cfg.url) !== origin && (
+              <button
+                className="btn ghost sm"
+                title={`Use ${origin} — the address this page was loaded from`}
+                onClick={() =>
+                  update((s) => {
+                    s.settings.server.url = origin;
+                  })
+                }
+              >
+                Use this address
+              </button>
+            )}
+          </div>
         </Field>
         <Field label="Access token" hint="only if the server sets UNI_TOKEN">
           <div style={{ display: 'flex', gap: 6 }}>

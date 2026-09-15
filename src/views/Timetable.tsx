@@ -100,12 +100,14 @@ export default function Timetable() {
             {hours.map((h) => (
               <div className="tt-hour" key={h} />
             ))}
-            {shown
-              .filter((s) => s.day === d)
-              .map((s) => {
+            {(() => {
+              const daySessions = shown.filter((s) => s.day === d);
+              const layout = layoutOverlaps(daySessions);
+              return daySessions.map((s) => {
                 const mod = modules.find((m) => m.id === s.moduleId);
                 const top = ((minutesOf(s.start) - DAY_START * 60) / 60) * HOUR_H;
                 const height = Math.max(24, ((minutesOf(s.end) - minutesOf(s.start)) / 60) * HOUR_H - 2);
+                const { left, width } = layout.get(s.id) ?? { left: 0, width: 100 };
                 return (
                   <div
                     key={s.id}
@@ -113,6 +115,9 @@ export default function Timetable() {
                     style={{
                       top,
                       height,
+                      left: `calc(${left}% + 2px)`,
+                      width: `calc(${width}% - 4px)`,
+                      right: 'auto',
                       background: `${mod?.colour ?? '#888'}26`,
                       borderLeftColor: mod?.colour ?? '#888',
                     }}
@@ -129,7 +134,8 @@ export default function Timetable() {
                     {s.weeks && <div className="s">wks {compress(s.weeks)}</div>}
                   </div>
                 );
-              })}
+              });
+            })()}
           </div>
         ))}
       </div>
@@ -147,6 +153,49 @@ export default function Timetable() {
       )}
     </>
   );
+}
+
+/** Assigns side-by-side columns to sessions whose times overlap, so alternating-week clashes stay clickable. */
+function layoutOverlaps(items: Session[]): Map<string, { left: number; width: number }> {
+  const ranges = items
+    .map((s) => ({ s, start: minutesOf(s.start), end: minutesOf(s.end) }))
+    .sort((a, b) => a.start - b.start || a.end - b.end);
+
+  const layout = new Map<string, { left: number; width: number }>();
+  let cluster: typeof ranges = [];
+  let clusterEnd = -Infinity;
+
+  const flush = () => {
+    if (!cluster.length) return;
+    const colEnds: number[] = [];
+    const colOf = new Map<string, number>();
+    for (const item of cluster) {
+      let col = colEnds.findIndex((end) => end <= item.start);
+      if (col === -1) {
+        col = colEnds.length;
+        colEnds.push(item.end);
+      } else {
+        colEnds[col] = item.end;
+      }
+      colOf.set(item.s.id, col);
+    }
+    const cols = colEnds.length;
+    for (const item of cluster) {
+      const col = colOf.get(item.s.id)!;
+      layout.set(item.s.id, { left: (col / cols) * 100, width: 100 / cols });
+    }
+    cluster = [];
+    clusterEnd = -Infinity;
+  };
+
+  for (const item of ranges) {
+    if (cluster.length && item.start >= clusterEnd) flush();
+    cluster.push(item);
+    clusterEnd = Math.max(clusterEnd, item.end);
+  }
+  flush();
+
+  return layout;
 }
 
 /** [1,2,3,5,7,8] → "1-3, 5, 7-8" */

@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 /**
  * Gathers the bundles a `tauri build` just produced into one flat directory.
  *
@@ -9,7 +9,7 @@
  * The signatures come along too — the manifest job reads them back off the
  * release, which is the only place the two platforms meet.
  *
- *   node scripts/collect-artifacts.mjs out
+ *   bun scripts/collect-artifacts.mjs out
  */
 import fs from 'node:fs';
 import path from 'node:path';

@@ -12,21 +12,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: npm
+      - uses: oven-sh/setup-bun@v2
 
-      - run: npm ci
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm run build
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun run test
+      - run: bun run build
 
       # The server has no build step, so a syntax check is the whole test.
       - name: Check the sync server parses
         run: |
-          node --check server/index.mjs
-          for f in scripts/*.mjs; do node --check "$f"; done
+          bun build server/index.mjs --target=node --outfile=/dev/null
+          for f in scripts/*.mjs; do bun build "$f" --target=node --outfile=/dev/null; done
 
       - uses: dtolnay/rust-toolchain@stable
       - uses: swatinem/rust-cache@v2

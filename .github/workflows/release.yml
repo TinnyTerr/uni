@@ -1,6 +1,6 @@
 # Cutting a release.
 #
-#   npm run release 0.2.0        # one version into all three manifests
+#   bun run release 0.2.0        # one version into all three manifests
 #   git commit -am "release 0.2.0"
 #   git tag v0.2.0 && git push --follow-tags
 #
@@ -46,6 +46,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: oven-sh/setup-bun@v2
+
       - name: Work out the version
         id: v
         run: |
@@ -59,7 +61,7 @@ jobs:
         run: |
           WANT="${{ steps.v.outputs.version }}"
           for f in package.json src-tauri/tauri.conf.json; do
-            GOT=$(node -p "require('./$f').version")
+            GOT=$(bun -p "require('./$f').version")
             [ "$GOT" = "$WANT" ] || { echo "$f says $GOT, tag says $WANT"; exit 1; }
           done
           GOT=$(grep -m1 '^version' src-tauri/Cargo.toml | cut -d'"' -f2)
@@ -89,10 +91,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: npm
+      - uses: oven-sh/setup-bun@v2
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -111,9 +110,9 @@ jobs:
             libayatana-appindicator3-dev librsvg2-dev \
             build-essential curl wget file libglib2.0-dev
 
-      - run: npm ci
-      - run: npm run typecheck
-      - run: npm test
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun run test
 
       # `tauri.release.conf.json` is what turns on the signed updater
       # artefacts, which a local build has no key for.
@@ -121,18 +120,18 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: npx tauri build --config src-tauri/tauri.release.conf.json --bundles ${{ matrix.bundles }}
+        run: bunx tauri build --config src-tauri/tauri.release.conf.json --bundles ${{ matrix.bundles }}
 
-      # Node rather than find/cp, so this step does not assume the Windows
+      # Bun rather than find/cp, so this step does not assume the Windows
       # runner has bash and the GNU tools on its PATH.
       - name: Collect this platform's artefacts
-        run: node scripts/collect-artifacts.mjs out
+        run: bun scripts/collect-artifacts.mjs out
 
       # The web app and the server that hands it to phones, built once.
       - name: Package the PWA
         if: runner.os == 'Linux'
         run: |
-          npm run build
+          bun run build
           tar czf "out/uni-schedule-pwa-${{ needs.prepare.outputs.version }}.tar.gz" \
             dist server scripts package.json README.md
 
@@ -149,9 +148,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
+      - uses: oven-sh/setup-bun@v2
 
       - name: Gather every signature on the release
         env:
@@ -160,7 +157,7 @@ jobs:
 
       - name: Write the updater manifest
         run: |
-          node scripts/latest-json.mjs \
+          bun scripts/latest-json.mjs \
             --base-url "${{ github.server_url }}/${{ github.repository }}/releases/download/${{ needs.prepare.outputs.tag }}" \
             --dir sigs \
             --notes "Uni Schedule ${{ needs.prepare.outputs.version }}" > latest.json

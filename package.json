@@ -7,14 +7,14 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "serve": "node server/index.mjs",
-    "pwa": "npm run build && node server/index.mjs",
+    "serve": "bun server/index.mjs",
+    "pwa": "bun run build && bun server/index.mjs",
     "tauri": "tauri",
     "app": "tauri dev",
     "dist": "tauri build",
     "typecheck": "tsc --noEmit",
-    "test": "esbuild tests/sync.check.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/sync.check.mjs --log-level=error && node node_modules/.cache/sync.check.mjs",
-    "release": "node scripts/bump-version.mjs"
+    "test": "bun run tests/sync.check.ts",
+    "release": "bun scripts/bump-version.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

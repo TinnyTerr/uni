@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 /**
  * Builds the updater manifest from signed build artefacts.
  *
@@ -12,8 +12,8 @@
  * fresh bundle directory or at a directory of signatures collected from a
  * release that several jobs have already uploaded to.
  *
- *   node scripts/latest-json.mjs --base-url https://.../download/v0.2.0
- *   node scripts/latest-json.mjs --base-url ... --dir sigs --notes "..."
+ *   bun scripts/latest-json.mjs --base-url https://.../download/v0.2.0
+ *   bun scripts/latest-json.mjs --base-url ... --dir sigs --notes "..."
  */
 import fs from 'node:fs';
 import path from 'node:path';

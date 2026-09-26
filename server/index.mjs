@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 /**
  * Uni Schedule sync server.
  *
@@ -280,7 +280,7 @@ const TYPES = {
 async function serveStatic(req, res, url) {
   if (!fs.existsSync(DIST)) {
     res.writeHead(503, { 'Content-Type': 'text/plain; charset=utf-8' });
-    res.end('No build found. Run `npm run build` first, then restart this server.\n');
+    res.end('No build found. Run `bun run build` first, then restart this server.\n');
     return;
   }
 
@@ -372,7 +372,7 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log('Uni Schedule sync server');
   console.log(`  data      ${STATE_FILE}${envelope.rev ? ` (rev ${envelope.rev})` : ' (empty)'}`);
   console.log(`  auth      ${TOKEN ? 'token required' : 'open — set UNI_TOKEN to require one'}`);
-  console.log(`  app       ${fs.existsSync(DIST) ? DIST : 'not built yet — run `npm run build`'}`);
+  console.log(`  app       ${fs.existsSync(DIST) ? DIST : 'not built yet — run `bun run build`'}`);
   console.log('  reachable at');
   console.log(`    http://localhost:${PORT}`);
   for (const ip of addresses()) console.log(`    http://${ip}:${PORT}   <- use this on your phone`);

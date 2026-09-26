@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 /**
  * Create (or reuse) a release on the Gitea repo and attach files to it.
  *
@@ -6,10 +6,10 @@
  * neither ships a CLI on the runner by default, so this talks to the REST API
  * directly rather than adding a dependency to the release path.
  *
- *   node scripts/publish-release.mjs --tag v0.2.0 --ensure      create it, once
- *   node scripts/publish-release.mjs --tag v0.2.0 --dir out     attach everything in out/
- *   node scripts/publish-release.mjs --tag v0.2.0 --download-sigs sigs
- *   node scripts/publish-release.mjs --tag latest --recreate latest.json
+ *   bun scripts/publish-release.mjs --tag v0.2.0 --ensure      create it, once
+ *   bun scripts/publish-release.mjs --tag v0.2.0 --dir out     attach everything in out/
+ *   bun scripts/publish-release.mjs --tag v0.2.0 --download-sigs sigs
+ *   bun scripts/publish-release.mjs --tag latest --recreate latest.json
  *
  * The `--ensure` / `--dir` / `--download-sigs` trio is how one manifest ends up
  * covering platforms built on different runners: one job opens the release,

@@ -114,7 +114,7 @@ export default function SyncSettings() {
       <p className="tiny dim">
         One server holds the copy every device agrees on. Each device still keeps a complete local
         copy and works offline; the server is only what they reconcile against when they can reach
-        it. Run it with <code className="mono">npm run serve</code> on a machine that stays on, then
+        it. Run it with <code className="mono">bun run serve</code> on a machine that stays on, then
         point this device — and your phone’s browser — at the same address.
       </p>
 
@@ -257,8 +257,8 @@ export default function SyncSettings() {
         <summary className="tiny">Getting it onto your phone</summary>
         <ol className="tiny dim">
           <li>
-            On the machine that will hold the data: <code className="mono">npm run build</code> then{' '}
-            <code className="mono">npm run serve</code>. It prints a{' '}
+            On the machine that will hold the data: <code className="mono">bun run build</code> then{' '}
+            <code className="mono">bun run serve</code>. It prints a{' '}
             <code className="mono">http://192.168.…</code> address.
           </li>
           <li>Open that address in your phone’s browser, on the same network.</li>

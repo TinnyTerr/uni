@@ -13,7 +13,7 @@ import { emptyState, STATE_VERSION, type AppState, type Year, type Term } from '
 import { registerProvider } from './notes/provider';
 import { LocalGitNotesProvider } from './notes/localGit';
 import { persistence } from './persist';
-import { guessDeviceName, isTauri } from './platform';
+import { currentOrigin, guessDeviceName, isTauri } from './platform';
 import {
   fetchState,
   fromDoc,
@@ -61,6 +61,14 @@ function seed(): AppState {
   ];
   s.settings.activeYearId = year.id;
   s.settings.deviceName = guessDeviceName();
+  // A phone that opened this app *from* the sync server has the answer to
+  // "where's the server?" sitting in its own address bar — a first run may
+  // as well use it instead of making someone type it back in by hand.
+  const origin = currentOrigin();
+  if (origin) {
+    s.settings.server.url = origin;
+    s.settings.server.enabled = true;
+  }
   return s;
 }
 

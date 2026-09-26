@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 /**
  * Sets one version in the three places that must agree.
  *
@@ -7,7 +7,7 @@
  * or downloads one it thinks it already has. The release workflow refuses to
  * build when they disagree, so this is how you keep them together.
  *
- *   node scripts/bump-version.mjs 0.2.0
+ *   bun scripts/bump-version.mjs 0.2.0
  */
 import fs from 'node:fs';
 

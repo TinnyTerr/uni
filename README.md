@@ -11,15 +11,15 @@ Nothing goes anywhere you did not put it.
 ## Running it
 
 ```bash
-npm install
-npm run app        # dev window with hot reload
-npm run dist       # build installers into src-tauri/target/release/bundle/
-npm run pwa        # build the web app and serve it to your phone
-npm test           # the sync reconciliation checks
-npm run typecheck
+bun install
+bun run app        # dev window with hot reload
+bun run dist       # build installers into src-tauri/target/release/bundle/
+bun run pwa        # build the web app and serve it to your phone
+bun run test       # the sync reconciliation checks
+bun run typecheck
 ```
 
-`npm run dist` builds whatever the machine you are on can build — `.deb` and
+`bun run dist` builds whatever the machine you are on can build — `.deb` and
 `.AppImage` on Linux, an NSIS `.exe` and an `.msi` on Windows. Tauri ignores the
 targets that do not apply, so the same config covers both.
 
@@ -39,7 +39,7 @@ chmod +x src-tauri/target/release/bundle/appimage/*.AppImage
 
 ## On your phone
 
-`npm run pwa` builds the front end and starts the sync server on port 4173. It
+`bun run pwa` builds the front end and starts the sync server on port 4173. It
 prints the addresses it can be reached on:
 
 ```
@@ -56,8 +56,8 @@ Run the server on whatever machine stays on. It only ever serves the built app
 and the state document, so a Pi is plenty:
 
 ```bash
-npm run build
-UNI_TOKEN=$(openssl rand -hex 16) PORT=4173 npm run serve
+bun run build
+UNI_TOKEN=$(openssl rand -hex 16) PORT=4173 bun run serve
 ```
 
 | Variable | Default | What it does |
@@ -110,7 +110,7 @@ installer running in passive mode.
 Cutting a release:
 
 ```bash
-npm run release 0.2.0            # one version into package.json, Cargo.toml, tauri.conf.json
+bun run release 0.2.0            # one version into package.json, Cargo.toml, tauri.conf.json
 git commit -am "release 0.2.0"
 git tag v0.2.0 && git push --follow-tags
 ```
@@ -144,7 +144,7 @@ It needs three secrets on the repository:
 The private key is not in this repository and must not be — `.gitignore` refuses
 `*.key`. Losing it means existing installs can no longer verify updates and have
 to be reinstalled by hand, so keep a copy somewhere safe. A new keypair comes
-from `npx tauri signer generate -w ~/.tauri/uni-schedule.key`; its public half
+from `bunx tauri signer generate -w ~/.tauri/uni-schedule.key`; its public half
 goes into `plugins.updater.pubkey` in `src-tauri/tauri.conf.json`.
 
 ## What's in it

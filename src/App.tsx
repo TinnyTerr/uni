@@ -11,6 +11,8 @@ import Assessments from './views/Assessments';
 import Marks from './views/Marks';
 import Notes from './views/Notes';
 import Settings from './views/Settings';
+import { pushTray } from './lib/tray';
+import { isTauri } from './lib/platform';
 import ConflictPrompt from './components/ConflictPrompt';
 
 interface NavItem {
@@ -83,6 +85,15 @@ function Shell() {
       .querySelector('meta[name="theme-color"]')
       ?.setAttribute('content', state.settings.theme === 'light' ? '#f5f6f9' : '#0f1116');
   }, [state.settings.theme]);
+
+  // The macOS menu bar item; refreshed each minute so "next up" rolls over.
+  useEffect(() => {
+    if (!isTauri() || !ready) return;
+    const push = () => void pushTray(state).catch(() => {});
+    push();
+    const t = setInterval(push, 60_000);
+    return () => clearInterval(t);
+  }, [state, ready]);
 
   // Alt+1…8 jumps straight to a section.
   useEffect(() => {

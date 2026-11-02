@@ -165,6 +165,9 @@ goes into `plugins.updater.pubkey` in `src-tauri/tauri.conf.json`.
 - **Notes** — search across every configured note repo, preview inline, open in
   your editor, and see which modules and assessments link to each note.
 
+- **Menu bar (macOS)** — the current or next session sits in the menu bar; the
+  dropdown lists today's timetable. Updates every minute.
+
 `Alt+1` … `Alt+8` jump between sections. On a phone the sidebar is a drawer
 behind the ☰ button.
 

@@ -1,5 +1,6 @@
 mod notes;
 mod store;
+mod tray;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -24,6 +25,7 @@ pub fn run() {
             notes::notes_read,
             notes::notes_search,
             notes::notes_git_info,
+            tray::set_tray,
         ])
         .run(tauri::generate_context!())
         .expect("error while running uni-schedule");

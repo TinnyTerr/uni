@@ -52,7 +52,8 @@ const PLATFORMS = [
   { match: /_arm64-setup\.exe$/, key: 'windows-aarch64', rank: 0 },
   { match: /_x64\.app\.tar\.gz$/, key: 'darwin-x86_64', rank: 0 },
   { match: /_aarch64\.app\.tar\.gz$/, key: 'darwin-aarch64', rank: 0 },
-  { match: /\.app\.tar\.gz$/, key: 'darwin-universal', rank: 2 },
+  // A universal build has no arch in its name; the updater wants a key per arch.
+  { match: /\.app\.tar\.gz$/, key: ['darwin-x86_64', 'darwin-aarch64'], rank: 2 },
 ];
 
 function* walk(root) {
@@ -77,12 +78,14 @@ for (const file of walk(dir)) {
     console.error(`skipping unrecognised artefact: ${name}`);
     continue;
   }
-  if (hit.key in ranks && ranks[hit.key] <= hit.rank) continue;
-  ranks[hit.key] = hit.rank;
-  platforms[hit.key] = {
-    signature: fs.readFileSync(file, 'utf8').trim(),
-    url: `${baseUrl.replace(/\/+$/, '')}/${encodeURIComponent(name)}`,
-  };
+  for (const key of [hit.key].flat()) {
+    if (key in ranks && ranks[key] <= hit.rank) continue;
+    ranks[key] = hit.rank;
+    platforms[key] = {
+      signature: fs.readFileSync(file, 'utf8').trim(),
+      url: `${baseUrl.replace(/\/+$/, '')}/${encodeURIComponent(name)}`,
+    };
+  }
 }
 
 if (Object.keys(platforms).length === 0) {

@@ -15,9 +15,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const dest = process.argv[2] ?? 'out';
-const source = path.join('src-tauri', 'target', 'release', 'bundle');
+// A universal macOS build lands under its own target triple.
+const sources = [
+  path.join('src-tauri', 'target', 'release', 'bundle'),
+  path.join('src-tauri', 'target', 'universal-apple-darwin', 'release', 'bundle'),
+];
 
-const WANTED = [/\.deb$/, /\.rpm$/, /\.AppImage$/, /-setup\.exe$/, /\.msi$/, /\.sig$/];
+const WANTED = [/\.deb$/, /\.rpm$/, /\.AppImage$/, /-setup\.exe$/, /\.msi$/, /\.dmg$/, /\.app\.tar\.gz$/, /\.sig$/];
 
 function* walk(dir) {
   if (!fs.existsSync(dir)) return;
@@ -31,7 +35,7 @@ function* walk(dir) {
 fs.mkdirSync(dest, { recursive: true });
 
 let found = 0;
-for (const file of walk(source)) {
+for (const file of sources.flatMap((d) => [...walk(d)])) {
   const name = path.basename(file);
   if (!WANTED.some((re) => re.test(name))) continue;
   fs.copyFileSync(file, path.join(dest, name));
@@ -40,7 +44,7 @@ for (const file of walk(source)) {
 }
 
 if (found === 0) {
-  console.error(`nothing to collect under ${source} — did the bundle step run?`);
+  console.error(`nothing to collect under ${sources.join(' or ')} — did the bundle step run?`);
   process.exit(1);
 }
 console.log(`\n${found} file(s) in ${dest}`);

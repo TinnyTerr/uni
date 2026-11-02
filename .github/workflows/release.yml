@@ -4,10 +4,10 @@
 #   git commit -am "release 0.2.0"
 #   git tag v0.2.0 && git push --follow-tags
 #
-# Linux and Windows bundles are built on their own runners and attached to one
+# Linux, Windows and macOS (unsigned universal) bundles are built on their own runners and attached to one
 # release, then a final job composes the updater manifest from every signature
-# on it. That ordering matters: the manifest has to describe both platforms, and
-# neither runner can see the other's artefacts.
+# on it. That ordering matters: the manifest has to describe every platform, and
+# no runner can see the others' artefacts.
 #
 # Secrets this needs on the repo:
 #   TAURI_SIGNING_PRIVATE_KEY           contents of ~/.tauri/uni-schedule.key
@@ -74,7 +74,7 @@ jobs:
           TAG="${{ steps.v.outputs.tag }}"
           gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" \
             --title "Uni Schedule ${{ steps.v.outputs.version }}" \
-            --notes "Desktop builds for Linux and Windows, plus the PWA bundle for the sync server."
+            --notes "Desktop builds for Linux, Windows and macOS, plus the PWA bundle for the sync server."
 
   build:
     needs: prepare
@@ -87,6 +87,9 @@ jobs:
             bundles: deb,appimage
           - os: windows-latest
             bundles: nsis,msi
+          - os: macos-latest
+            bundles: app,dmg
+            args: --target universal-apple-darwin
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -99,6 +102,10 @@ jobs:
         with:
           workspaces: src-tauri
           key: ${{ matrix.os }}
+
+      - name: Add both macOS Rust targets
+        if: runner.os == 'macOS'
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
 
       # Windows brings its own webview; only Linux needs the system libraries.
       - name: System libraries for the webview
@@ -120,7 +127,7 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: bunx tauri build --config src-tauri/tauri.release.conf.json --bundles ${{ matrix.bundles }}
+        run: bunx tauri build --config src-tauri/tauri.release.conf.json --bundles ${{ matrix.bundles }} ${{ matrix.args }}
 
       # Bun rather than find/cp, so this step does not assume the Windows
       # runner has bash and the GNU tools on its PATH.

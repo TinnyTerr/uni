@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- The sync server is user-chosen and usually plain http on the LAN; the
+       bundled app's WKWebView (ATS) refuses that without this. -->
+  <key>NSAppTransportSecurity</key>
+  <dict>
+    <key>NSAllowsArbitraryLoads</key>
+    <true/>
+  </dict>
+  <key>NSLocalNetworkUsageDescription</key>
+  <string>Uni connects to your sync server on the local network.</string>
+</dict>
+</plist>

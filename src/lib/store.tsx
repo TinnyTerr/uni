@@ -87,6 +87,7 @@ function migrate(raw: unknown): AppState {
     sessions: s.sessions ?? [],
     assessments: s.assessments ?? [],
     events: s.events ?? [],
+    buildings: s.buildings ?? [],
     settings: {
       ...base.settings,
       ...(s.settings ?? {}),

@@ -1,5 +1,5 @@
 /** Persisted document version — bump when a migration is needed. */
-export const STATE_VERSION = 2;
+export const STATE_VERSION = 3;
 
 export type Id = string;
 
@@ -101,6 +101,18 @@ export interface CalEvent {
   colour: string;
   location: string;
   description: string;
+  /** iCalendar UID when imported, so re-importing the feed updates in place. */
+  uid?: string;
+}
+
+/** A campus building. Rooms are whatever follows the code in a location string. */
+export interface Building {
+  id: Id;
+  /** Short code as it appears in timetables, e.g. "MB" or "Roscoe". */
+  code: string;
+  name: string;
+  lat: number;
+  lng: number;
 }
 
 export interface NotesRoot {
@@ -157,6 +169,7 @@ export interface AppState {
   sessions: Session[];
   assessments: Assessment[];
   events: CalEvent[];
+  buildings: Building[];
   settings: Settings;
 }
 
@@ -180,6 +193,7 @@ export function emptyState(): AppState {
     sessions: [],
     assessments: [],
     events: [],
+    buildings: [],
     settings: {
       activeYearId: null,
       notesRoots: [],

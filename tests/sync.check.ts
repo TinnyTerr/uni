@@ -52,7 +52,7 @@ const roundTripped = JSON.parse(JSON.stringify(doc));
 ok('hash survives a JSON round trip', hashDoc(doc) === hashDoc(roundTripped));
 const reordered = { settings: doc.settings, events: doc.events, assessments: doc.assessments,
                     sessions: doc.sessions, modules: doc.modules, terms: doc.terms,
-                    years: doc.years, version: doc.version } as typeof doc;
+                    years: doc.years, buildings: doc.buildings, version: doc.version } as typeof doc;
 ok('hash ignores key order', hashDoc(doc) === hashDoc(reordered));
 ok('hash changes with content', hashDoc(doc) !== hashDoc({ ...doc, modules: [] }));
 

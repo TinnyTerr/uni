@@ -63,3 +63,10 @@ pub fn backup_state(app: AppHandle, stamp: String) -> Result<String, String> {
     fs::copy(&path, &dest).map_err(|e| format!("copy to {}: {e}", dest.display()))?;
     Ok(dest.display().to_string())
 }
+
+/// Writes a file the user just picked in a save dialog (calendar exports).
+/// The path comes from the native dialog, never from page content.
+#[tauri::command]
+pub fn write_text_file(path: String, contents: String) -> Result<(), String> {
+    fs::write(&path, contents).map_err(|e| format!("cannot write {path}: {e}"))
+}

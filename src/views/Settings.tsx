@@ -6,6 +6,7 @@ import { ConfirmButton, Empty, Field } from '../components/ui';
 import { isTauri } from '../lib/platform';
 import SyncSettings from './SyncSettings';
 import UpdateSettings from './UpdateSettings';
+import CalendarSettings from './CalendarSettings';
 
 export default function Settings() {
   const { state, update, dataPath, backup } = useStore();
@@ -312,6 +313,8 @@ export default function Settings() {
           provider that made it.
         </div>
       </div>
+
+      <CalendarSettings />
 
       <SyncSettings />
 

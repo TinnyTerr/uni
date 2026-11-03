@@ -52,3 +52,31 @@ export function guessDeviceName(): string {
   if (/Android/.test(ua)) return 'Android phone';
   return 'Browser';
 }
+
+/**
+ * Hand the user a text file. The desktop build asks where to put it; a browser
+ * just downloads it. Resolves to where it went, or null if they cancelled.
+ */
+export async function saveTextFile(
+  filename: string,
+  contents: string,
+  mime = 'text/plain',
+): Promise<string | null> {
+  if (isTauri()) {
+    const { save } = await import('@tauri-apps/plugin-dialog');
+    const { invoke } = await import('@tauri-apps/api/core');
+    const path = await save({ defaultPath: filename, title: 'Save as' });
+    if (!path) return null;
+    await invoke('write_text_file', { path, contents });
+    return path;
+  }
+  const url = URL.createObjectURL(new Blob([contents], { type: `${mime};charset=utf-8` }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  return filename;
+}

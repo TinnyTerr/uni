@@ -21,6 +21,7 @@ pub fn run() {
             store::save_state,
             store::backup_state,
             store::data_location,
+            store::write_text_file,
             notes::notes_index,
             notes::notes_read,
             notes::notes_search,

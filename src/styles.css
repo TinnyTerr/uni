@@ -448,7 +448,7 @@ table.data tr.clickable:hover td { background: var(--bg-3); cursor: pointer; }
   border-right: 1px solid var(--line); background: var(--bg-2);
   display: flex; flex-direction: column; gap: 10px;
 }
-.map-host { flex: 1; min-width: 0; background: var(--bg-3); }
+.map-host { flex: 1; min-width: 0; background: var(--bg-3); position: relative; z-index: 0; isolation: isolate; /* leaflet panes go to z-index 1000 and would sit over modals */ }
 .map-card { border: 1px solid var(--line); border-radius: 8px; padding: 10px; background: var(--bg); }
 .map-list { display: flex; flex-direction: column; }
 .map-row {

@@ -7,6 +7,9 @@
  */
 const VERSION = 'uni-v1';
 const SHELL = `${VERSION}-shell`;
+const TILES = `${VERSION}-tiles`;
+const TILE_HOST = 'tile.openstreetmap.org';
+const MAX_TILES = 600;
 
 // Enough to boot offline; hashed assets are added as they are requested.
 const PRECACHE = [
@@ -32,7 +35,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== SHELL).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k !== SHELL && k !== TILES).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
 });
@@ -47,6 +50,30 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
+
+  // Map tiles: cache-first, so the campus you have already looked at works
+  // with no signal. Bounded, oldest evicted first.
+  if (url.hostname === TILE_HOST) {
+    event.respondWith(
+      caches.open(TILES).then((cache) =>
+        cache.match(request).then(
+          (hit) =>
+            hit ??
+            fetch(request).then(async (res) => {
+              // <img> tiles are cross-origin no-cors, so the response is opaque.
+              if (res.ok || res.type === 'opaque') {
+                await cache.put(request, res.clone());
+                const keys = await cache.keys();
+                for (const k of keys.slice(0, Math.max(0, keys.length - MAX_TILES))) await cache.delete(k);
+              }
+              return res;
+            }),
+        ),
+      ),
+    );
+    return;
+  }
+
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith('/api/')) return; // always live
 

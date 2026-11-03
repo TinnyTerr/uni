@@ -7,6 +7,7 @@ import { parse, relativeDay, termContaining } from '../lib/dates';
 import { Dot, Empty } from '../components/ui';
 import { NoteLinkChips, NoteViewer } from '../components/NoteLinks';
 import type { NoteLink } from '../lib/types';
+import { transitionsOn } from '../lib/campus';
 
 export default function Dashboard({ go }: { go: (view: string) => void }) {
   const { state } = useStore();
@@ -20,6 +21,8 @@ export default function Dashboard({ go }: { go: (view: string) => void }) {
     d.setDate(d.getDate() + 1);
     return occurrencesOn(state, d);
   }, [state]);
+
+  const walks = useMemo(() => transitionsOn(state, now).filter((t) => t.to.end >= now), [state]);
 
   const deadlines = useMemo(
     () => upcomingDeadlines(state, state.settings.horizonDays, now),
@@ -76,6 +79,22 @@ export default function Dashboard({ go }: { go: (view: string) => void }) {
                     </div>
                   </div>
                   {o.kind === 'deadline' && <span className="pill">deadline</span>}
+                </div>
+              ))}
+            </div>
+          )}
+          {walks.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              {walks.map((t) => (
+                <div key={t.to.key} className="tiny" style={{ padding: '2px 0' }}>
+                  <span className="dim">
+                    {format(t.to.start, 'HH:mm')} {t.fromBuilding.code || t.fromBuilding.name} →{' '}
+                    {t.toBuilding.code || t.toBuilding.name}:
+                  </span>{' '}
+                  {t.walk} min walk, {t.gap} min gap
+                  {t.shortBy > 0 && (
+                    <b style={{ color: 'var(--danger)' }}> · you'll be about {t.shortBy} min late</b>
+                  )}
                 </div>
               ))}
             </div>

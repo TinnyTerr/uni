@@ -155,6 +155,12 @@ goes into `plugins.updater.pubkey` in `src-tauri/tauri.conf.json`.
   one-off events. Shows which teaching week of which term you're looking at.
 - **Timetable** — the weekly grid. Sessions repeat across a term and can be
   restricted to particular teaching weeks (`1-5, 7, 9-11`).
+- **Campus map** — pin your buildings on an OpenStreetMap map. A session's
+  location ("MB 2.14") is matched to a building by its code or name, the rest
+  being the room. The next class is highlighted with a directions link, and
+  Today and the map warn when the walk between back-to-back sessions is longer
+  than the gap. Buildings sync with everything else; tiles you have viewed are
+  cached for offline use on the phone install.
 - **Modules** — code, title, credits, colour, lecturer, linked notes.
 - **Assessments** — deadlines with kind, weight, status and mark.
 - **Marks** — UK marking throughout. Per module: *provisional* (weighted mean
@@ -168,11 +174,25 @@ goes into `plugins.updater.pubkey` in `src-tauri/tauri.conf.json`.
 - **Menu bar (macOS)** — the current or next session sits in the menu bar; the
   dropdown lists today's timetable. Updates every minute.
 
-`Alt+1` … `Alt+8` jump between sections. On a phone the sidebar is a drawer
+`Alt+1` … `Alt+9` jump between sections. On a phone the sidebar is a drawer
 behind the ☰ button.
 
 Note folders are read from the filesystem, so they are desktop-only; the phone
 syncs the schedule, deadlines and marks, and says so where notes would be.
+
+## Calendar files (iCal)
+
+**Settings → Calendar files** exports the timetable (every term), deadlines and
+events as `.ics`, and imports one. Imported events keep their UID, so importing
+a university feed again updates in place instead of duplicating. Recurrence is
+the common subset: DAILY/WEEKLY/MONTHLY/YEARLY with INTERVAL, COUNT, UNTIL,
+BYDAY and EXDATE, expanded about a year ahead; TZID and UTC times are converted
+to local time.
+
+The sync server also serves a live feed at `/api/calendar.ics` (add
+`?token=…` when `UNI_TOKEN` is set) that Google, Apple and Outlook can subscribe
+to. It runs the app's own TypeScript, so it needs Bun and the source tree next
+to `server/`. The URL carries the token, so treat it as a secret.
 
 ## Notes: the provider layer
 

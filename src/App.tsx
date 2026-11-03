@@ -10,6 +10,7 @@ import Modules from './views/Modules';
 import Assessments from './views/Assessments';
 import Marks from './views/Marks';
 import Notes from './views/Notes';
+import MapView from './views/MapView';
 import Settings from './views/Settings';
 import { pushTray } from './lib/tray';
 import { isTauri } from './lib/platform';
@@ -27,6 +28,7 @@ const NAV: NavItem[] = [
   { id: 'dashboard', label: 'Today', icon: '◉', group: 'Overview' },
   { id: 'calendar', label: 'Calendar', icon: '▦', group: 'Overview', flush: true },
   { id: 'timetable', label: 'Timetable', icon: '⌗', group: 'Overview' },
+  { id: 'map', label: 'Campus map', icon: '⌖', group: 'Overview', flush: true },
   { id: 'modules', label: 'Modules', icon: '❑', group: 'Study' },
   { id: 'assessments', label: 'Assessments', icon: '✎', group: 'Study' },
   { id: 'marks', label: 'Marks', icon: '％', group: 'Study' },
@@ -95,7 +97,7 @@ function Shell() {
     return () => clearInterval(t);
   }, [state, ready]);
 
-  // Alt+1…8 jumps straight to a section.
+  // Alt+1…9 jumps straight to a section.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!e.altKey || e.ctrlKey || e.metaKey) return;
@@ -197,6 +199,7 @@ function Shell() {
           {view === 'dashboard' && <Dashboard go={setView} />}
           {view === 'calendar' && <CalendarView />}
           {view === 'timetable' && <Timetable />}
+          {view === 'map' && <MapView />}
           {view === 'modules' && <Modules />}
           {view === 'assessments' && <Assessments />}
           {view === 'marks' && <Marks />}

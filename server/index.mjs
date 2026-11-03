@@ -19,6 +19,7 @@
  *   GET  /api/state           { rev, updatedAt, device, doc }
  *   PUT  /api/state           { baseRev, doc, device } -> 200 | 409 + server copy
  *   GET  /api/events          server-sent events, one per accepted write
+ *   GET  /api/calendar.ics    the schedule as an iCalendar feed to subscribe to
  *
  * Environment:
  *   PORT        listen port                      (default 4173)
@@ -234,6 +235,34 @@ async function api(req, res, url) {
     broadcast();
     console.log(`rev ${next.rev} from ${next.device ?? 'unknown device'}`);
     return json(res, 200, { rev: next.rev, updatedAt: next.updatedAt, device: next.device });
+  }
+
+  if (route === '/api/calendar.ics' && req.method === 'GET') {
+    if (!envelope.doc) return json(res, 404, { error: 'nothing has been synced yet' });
+    let buildIcs;
+    try {
+      // Bun runs TypeScript directly, so the feed shares the app's own code.
+      ({ buildIcs } = await import('../src/lib/ical.ts'));
+    } catch (e) {
+      return json(res, 500, { error: `calendar feed needs bun and the source tree: ${e.message}` });
+    }
+    const d = envelope.doc;
+    const body = buildIcs({
+      ...d,
+      terms: d.terms ?? [],
+      sessions: d.sessions ?? [],
+      modules: d.modules ?? [],
+      assessments: d.assessments ?? [],
+      events: d.events ?? [],
+      buildings: d.buildings ?? [],
+    });
+    res.writeHead(200, {
+      ...CORS,
+      'Content-Type': 'text/calendar; charset=utf-8',
+      'Content-Disposition': 'inline; filename="uni-schedule.ics"',
+      'Cache-Control': 'no-cache',
+    });
+    return res.end(body);
   }
 
   if (route === '/api/events' && req.method === 'GET') {

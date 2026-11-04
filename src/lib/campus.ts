@@ -39,6 +39,38 @@ export function boundsFromPoints(pts: Pt[]): Bounds {
   return [Math.min(...lats), Math.min(...lngs), Math.max(...lats), Math.max(...lngs)];
 }
 
+/** A room's outline: its drawn points, or the corners of its box. */
+export function roomPointsOf(r: Room): Pt[] {
+  if (r.points && r.points.length >= 3) return r.points;
+  return [[r.x, r.y], [r.x + r.w, r.y], [r.x + r.w, r.y + r.h], [r.x, r.y + r.h]];
+}
+
+/** Set a room's outline and keep its bounding box in step. */
+export function setRoomPoints(r: Room, pts: Pt[]): void {
+  const xs = pts.map((p) => p[0]);
+  const ys = pts.map((p) => p[1]);
+  r.points = pts;
+  r.x = Math.min(...xs);
+  r.y = Math.min(...ys);
+  r.w = Math.max(...xs) - r.x;
+  r.h = Math.max(...ys) - r.y;
+}
+
+/** Area centroid of a polygon, falling back to the vertex mean when it is degenerate. */
+export function centroidOf(pts: Pt[]): Pt {
+  let a = 0, cx = 0, cy = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const [x0, y0] = pts[i];
+    const [x1, y1] = pts[(i + 1) % pts.length];
+    const f = x0 * y1 - x1 * y0;
+    a += f;
+    cx += (x0 + x1) * f;
+    cy += (y0 + y1) * f;
+  }
+  if (Math.abs(a) < 1e-6) return [pts.reduce((n, p) => n + p[0], 0) / pts.length, pts.reduce((n, p) => n + p[1], 0) / pts.length];
+  return [cx / (3 * a), cy / (3 * a)];
+}
+
 export function centreOf(bounds: Bounds): { lat: number; lng: number } {
   return { lat: (bounds[0] + bounds[2]) / 2, lng: (bounds[1] + bounds[3]) / 2 };
 }

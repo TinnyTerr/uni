@@ -105,7 +105,7 @@ export interface CalEvent {
   uid?: string;
 }
 
-/** A room on a floor plan, as a rectangle in the plan's own units. */
+/** A room on a floor plan, in the plan's own units. `x/y/w/h` is always its bounding box. */
 export interface Room {
   id: Id;
   /** The part of the code after building and floor: "26" in RC426. */
@@ -115,6 +115,8 @@ export interface Room {
   y: number;
   w: number;
   h: number;
+  /** Outline as [x, y] corners, at least 3. Absent on older saves, which are plain boxes. */
+  points?: [number, number][];
 }
 
 /**

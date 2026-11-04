@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { uid, useStore } from '../lib/store';
-import { allConnectors, roomCodeOf } from '../lib/campus';
+import { allConnectors, centroidOf, roomCodeOf, roomPointsOf, setRoomPoints, type Pt } from '../lib/campus';
 import type { Building, Connector, Floor, Room } from '../lib/types';
 import { ConfirmButton, Field, Modal } from '../components/ui';
 
@@ -12,8 +12,8 @@ const MIN_ROOM = 12;
 
 type Drag =
   | { kind: 'draw'; x0: number; y0: number; x1: number; y1: number }
-  | { kind: 'move'; id: string; dx: number; dy: number }
-  | { kind: 'resize'; id: string }
+  | { kind: 'move'; id: string; x0: number; y0: number; orig: Pt[] }
+  | { kind: 'vertex'; id: string; i: number }
   | { kind: 'point'; id: string };
 
 /** Read an image and shrink it so a floor plan does not bloat the synced document. */
@@ -130,18 +130,22 @@ export default function FloorPlans({
     else if (drag.kind === 'move') {
       editFloor((f) => {
         const r = f.rooms.find((x) => x.id === drag.id);
-        if (r) {
-          r.x = Math.round(Math.max(0, Math.min(f.w - r.w, p.x - drag.dx)));
-          r.y = Math.round(Math.max(0, Math.min(f.h - r.h, p.y - drag.dy)));
-        }
+        if (!r) return;
+        const minX = Math.min(...drag.orig.map((q) => q[0]));
+        const maxX = Math.max(...drag.orig.map((q) => q[0]));
+        const minY = Math.min(...drag.orig.map((q) => q[1]));
+        const maxY = Math.max(...drag.orig.map((q) => q[1]));
+        const dx = Math.round(Math.max(-minX, Math.min(f.w - maxX, p.x - drag.x0)));
+        const dy = Math.round(Math.max(-minY, Math.min(f.h - maxY, p.y - drag.y0)));
+        setRoomPoints(r, drag.orig.map(([x, y]) => [x + dx, y + dy]));
       });
-    } else if (drag.kind === 'resize') {
+    } else if (drag.kind === 'vertex') {
       editFloor((f) => {
         const r = f.rooms.find((x) => x.id === drag.id);
-        if (r) {
-          r.w = Math.round(Math.max(MIN_ROOM, p.x - r.x));
-          r.h = Math.round(Math.max(MIN_ROOM, p.y - r.y));
-        }
+        if (!r) return;
+        const pts = roomPointsOf(r).map((q) => [...q] as Pt);
+        pts[drag.i] = [Math.round(p.x), Math.round(p.y)];
+        setRoomPoints(r, pts);
       });
     } else {
       editFloor((f) => {
@@ -170,6 +174,12 @@ export default function FloorPlans({
           w: Math.round(w),
           h: Math.round(h),
         };
+        setRoomPoints(room, [
+          [room.x, room.y],
+          [room.x + room.w, room.y],
+          [room.x + room.w, room.y + room.h],
+          [room.x, room.y + room.h],
+        ]);
         editFloor((f) => f.rooms.push(room));
         setSel(room.id);
         setTool('select');
@@ -288,13 +298,12 @@ export default function FloorPlans({
               )}
               {floor.rooms.map((r) => {
                 const lit = !!highlight && r.code.toLowerCase() === highlight.toLowerCase() && floor.level === startLevel;
+                const pts = roomPointsOf(r);
+                const [cx, cy] = centroidOf(pts);
                 return (
                   <g key={r.id}>
-                    <rect
-                      x={r.x}
-                      y={r.y}
-                      width={r.w}
-                      height={r.h}
+                    <polygon
+                      points={pts.map((q) => q.join(',')).join(' ')}
                       className={`plan-room ${r.id === sel ? 'sel' : ''} ${lit ? 'lit' : ''}`}
                       onPointerDown={(e) => {
                         if (tool !== 'select') return onBackground(e);
@@ -302,31 +311,63 @@ export default function FloorPlans({
                         setSel(r.id);
                         const p = point(e);
                         (e.currentTarget as Element).setPointerCapture(e.pointerId);
-                        setDrag({ kind: 'move', id: r.id, dx: p.x - r.x, dy: p.y - r.y });
+                        setDrag({ kind: 'move', id: r.id, x0: p.x, y0: p.y, orig: pts.map((q) => [...q] as Pt) });
                       }}
                     />
-                    <text
-                      x={r.x + r.w / 2}
-                      y={r.y + r.h / 2}
-                      className="plan-label"
-                      textAnchor="middle"
-                      dominantBaseline="middle"
-                    >
+                    <text x={cx} y={cy} className="plan-label" textAnchor="middle" dominantBaseline="middle">
                       {r.code ? roomCodeOf(building, floor, r) : '?'}
                     </text>
                     {r.id === sel && tool === 'select' && (
-                      <rect
-                        x={r.x + r.w - 8}
-                        y={r.y + r.h - 8}
-                        width={16}
-                        height={16}
-                        className="plan-handle"
-                        onPointerDown={(e) => {
-                          e.stopPropagation();
-                          (e.currentTarget as Element).setPointerCapture(e.pointerId);
-                          setDrag({ kind: 'resize', id: r.id });
-                        }}
-                      />
+                      <>
+                        {pts.map((q, i) => {
+                          const n = pts[(i + 1) % pts.length];
+                          return (
+                            <circle
+                              key={`m${i}`}
+                              cx={(q[0] + n[0]) / 2}
+                              cy={(q[1] + n[1]) / 2}
+                              r={6}
+                              className="plan-handle mid"
+                              onPointerDown={(e) => {
+                                e.stopPropagation();
+                                const at: Pt = [Math.round((q[0] + n[0]) / 2), Math.round((q[1] + n[1]) / 2)];
+                                editFloor((f) => {
+                                  const rr = f.rooms.find((x) => x.id === r.id);
+                                  if (!rr) return;
+                                  const next = roomPointsOf(rr).map((v) => [...v] as Pt);
+                                  next.splice(i + 1, 0, at);
+                                  setRoomPoints(rr, next);
+                                });
+                                (e.currentTarget as Element).setPointerCapture(e.pointerId);
+                                setDrag({ kind: 'vertex', id: r.id, i: i + 1 });
+                              }}
+                            />
+                          );
+                        })}
+                        {pts.map((q, i) => (
+                          <rect
+                            key={`v${i}`}
+                            x={q[0] - 8}
+                            y={q[1] - 8}
+                            width={16}
+                            height={16}
+                            className="plan-handle"
+                            onPointerDown={(e) => {
+                              e.stopPropagation();
+                              (e.currentTarget as Element).setPointerCapture(e.pointerId);
+                              setDrag({ kind: 'vertex', id: r.id, i });
+                            }}
+                            onContextMenu={(e) => {
+                              e.preventDefault();
+                              if (pts.length <= 3) return;
+                              editFloor((f) => {
+                                const rr = f.rooms.find((x) => x.id === r.id);
+                                if (rr) setRoomPoints(rr, roomPointsOf(rr).filter((_, k) => k !== i));
+                              });
+                            }}
+                          />
+                        ))}
+                      </>
                     )}
                   </g>
                 );
@@ -469,7 +510,7 @@ export default function FloorPlans({
                   <div className="tiny dim">
                     {floor.rooms.length} room{floor.rooms.length === 1 ? '' : 's'},{' '}
                     {floor.connectors.length} exit/passage{floor.connectors.length === 1 ? '' : 's'}. Pick{' '}
-                    <b>Draw room</b> and drag on the plan; click a room to rename or resize it.
+                    <b>Draw room</b> and drag on the plan; click a room to rename or move it. Drag its square handles to reshape, drag a round one to add a corner, right-click a corner to remove it.
                   </div>
                   <ConfirmButton
                     label="Delete floor"

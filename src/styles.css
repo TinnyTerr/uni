@@ -481,6 +481,7 @@ table.data tr.clickable:hover td { background: var(--bg-3); cursor: pointer; }
 .plan-label { fill: var(--text); font: 600 18px ui-monospace, monospace; pointer-events: none; }
 .plan-label.small { font-size: 15px; }
 .plan-handle { fill: #fff; stroke: var(--accent); stroke-width: 2; cursor: pointer; }
+.plan-handle.mid { opacity: .55; }
 .plan-exit { fill: #4fae86; stroke: #fff; stroke-width: 2; }
 .plan-pass { fill: #c98a3e; stroke: #fff; stroke-width: 2; }
 .plan-exit.sel, .plan-pass.sel { stroke: var(--accent); stroke-width: 4; }

@@ -1,6 +1,6 @@
 /** Building resolution, walking time, and the iCalendar round trip. */
 import { emptyState, type AppState, type Building } from '../src/lib/types';
-import { resolveBuilding, walkMinutes, transitionsOn, parseRoomCode, findRoom, passageBetween, boundsOf } from '../src/lib/campus';
+import { resolveBuilding, walkMinutes, transitionsOn, parseRoomCode, findRoom, passageBetween, boundsOf, roomPointsOf, setRoomPoints, centroidOf } from '../src/lib/campus';
 import { buildIcs, parseIcs, mergeImported } from '../src/lib/ical';
 
 let failures = 0;
@@ -107,6 +107,12 @@ const first = mergeImported([], p, () => `id${n++}`, '#abc');
 const again = mergeImported(first.events, p, () => `id${n++}`, '#abc');
 ok('first import adds', first.added === p.length && first.updated === 0);
 ok('second import updates in place', again.added === 0 && again.updated === p.length && again.events.length === first.events.length);
+
+const box = { id: 'q', code: '1', name: '', x: 0, y: 0, w: 10, h: 20 };
+ok('plain room is its four corners', roomPointsOf(box).length === 4);
+setRoomPoints(box, [[0, 0], [30, 0], [30, 10], [10, 10], [10, 40], [0, 40]]);
+ok('outline updates the box', box.x === 0 && box.y === 0 && box.w === 30 && box.h === 40);
+ok('centroid of a square', centroidOf([[0, 0], [10, 0], [10, 10], [0, 10]]).join() === '5,5');
 
 console.log(failures ? `\n${failures} FAILED` : '\nall passed');
 (globalThis as { process?: { exitCode?: number } }).process!.exitCode = failures ? 1 : 0;

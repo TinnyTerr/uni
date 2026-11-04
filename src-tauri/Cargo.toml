@@ -1,6 +1,6 @@
 [package]
 name = "uni-schedule"
-version = "0.2.1"
+version = "0.2.2"
 description = "University schedule, deadlines and marks tracker"
 authors = ["Dav McDonald"]
 edition = "2021"

@@ -23,6 +23,22 @@ export function boundsOf(b: Building): Bounds {
   return [b.lat - dLat, b.lng - dLng, b.lat + dLat, b.lng + dLng];
 }
 
+export type Pt = [number, number];
+
+/** The building's outline: its drawn points, or the corners of its box. */
+export function pointsOf(b: Building): Pt[] {
+  if (b.points && b.points.length >= 3) return b.points;
+  const [s, w, n, e] = boundsOf(b);
+  return [[s, w], [s, e], [n, e], [n, w]];
+}
+
+/** Bounding box of an outline as [south, west, north, east]. */
+export function boundsFromPoints(pts: Pt[]): Bounds {
+  const lats = pts.map((p) => p[0]);
+  const lngs = pts.map((p) => p[1]);
+  return [Math.min(...lats), Math.min(...lngs), Math.max(...lats), Math.max(...lngs)];
+}
+
 export function centreOf(bounds: Bounds): { lat: number; lng: number } {
   return { lat: (bounds[0] + bounds[2]) / 2, lng: (bounds[1] + bounds[3]) / 2 };
 }

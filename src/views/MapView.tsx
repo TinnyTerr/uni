@@ -7,15 +7,16 @@ import { occurrencesOn } from '../lib/occurrences';
 import {
   TILE_ATTRIBUTION,
   TILE_URL,
+  boundsFromPoints,
   boundsOf,
-  boxFrom,
+  pointsOf,
   centreOf,
   directionsUrl,
   findRoom,
   resolveBuilding,
   transitionsOn,
   walkMinutes,
-  type Bounds,
+  type Pt,
 } from '../lib/campus';
 import type { Building } from '../lib/types';
 import { ConfirmButton, Empty, Field, Modal } from '../components/ui';
@@ -25,23 +26,20 @@ interface Draft {
   id: string;
   code: string;
   name: string;
-  bounds: Bounds;
+  points: Pt[];
   isNew: boolean;
 }
-
-/** Smallest box a drag may make, in degrees (about 5 m); anything less is a click. */
-const MIN_SPAN = 0.00005;
 
 const UK_CENTRE: L.LatLngTuple = [54.0, -2.5];
 
 const COLOURS = { next: '#ffffff', today: '#5b8def', idle: '#8a93a6' } as const;
 
-function handleIcon(centre = false) {
+function handleIcon(centre = false, mid = false) {
   return L.divIcon({
     className: '',
     iconSize: [14, 14],
     iconAnchor: [7, 7],
-    html: `<div class="map-handle${centre ? ' centre' : ''}"></div>`,
+    html: `<div class="map-handle${centre ? ' centre' : ''}${mid ? ' mid' : ''}"></div>`,
   });
 }
 
@@ -56,6 +54,9 @@ export default function MapView() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [selId, setSelId] = useState<string | null>(null);
   const [plans, setPlans] = useState<{ id: string; level?: number; room?: string } | null>(null);
+  const [drawn, setDrawn] = useState(0);
+  const finishRef = useRef<() => void>(() => {});
+  const cancelRef = useRef<() => void>(() => {});
   const placingRef = useRef(false);
   placingRef.current = placing;
   const fitted = useRef(false);
@@ -93,35 +94,65 @@ export default function MapView() {
     const map = L.map(hostRef.current, { zoomControl: true }).setView(UK_CENTRE, 6);
     L.tileLayer(TILE_URL, { attribution: TILE_ATTRIBUTION, maxZoom: 19 }).addTo(map);
     layerRef.current = L.layerGroup().addTo(map);
-    // Drag out a box where the building stands.
-    let start: L.LatLng | null = null;
-    let preview: L.Rectangle | null = null;
-    map.on('mousedown', (e: L.LeafletMouseEvent) => {
+    // Click out the corners of the building; click the first one, press Enter or hit Finish to close it.
+    const pts: Pt[] = [];
+    const draw = L.layerGroup().addTo(map);
+    let rubber: L.LatLng | null = null;
+    const redraw = () => {
+      draw.clearLayers();
+      const line: L.LatLngTuple[] = pts.map((p) => [p[0], p[1]]);
+      if (rubber && line.length) line.push([rubber.lat, rubber.lng]);
+      if (line.length > 1) L.polyline(line, { color: '#5b8def', weight: 2, dashArray: '4' }).addTo(draw);
+      pts.forEach((p, i) =>
+        L.circleMarker(p, { radius: i === 0 ? 7 : 4, color: '#5b8def', fillOpacity: 1, weight: 2 }).addTo(draw),
+      );
+    };
+    const reset = () => {
+      pts.length = 0;
+      rubber = null;
+      redraw();
+      setDrawn(0);
+    };
+    const finish = () => {
+      if (pts.length < 3) return;
+      const points = pts.map((p) => [p[0], p[1]] as Pt);
+      reset();
+      setPlacing(false);
+      setDraft({ id: uid(), code: '', name: '', points, isNew: true });
+    };
+    finishRef.current = finish;
+    cancelRef.current = reset;
+    map.on('click', (e: L.LeafletMouseEvent) => {
       if (!placingRef.current) return;
-      start = e.latlng;
-      map.dragging.disable();
-      preview = L.rectangle(L.latLngBounds(start, start), { color: '#5b8def', weight: 2, dashArray: '4' }).addTo(map);
+      if (pts.length >= 3) {
+        const first = map.latLngToContainerPoint(pts[0]);
+        if (first.distanceTo(e.containerPoint) < 12) return finish();
+      }
+      pts.push([e.latlng.lat, e.latlng.lng]);
+      setDrawn(pts.length);
+      redraw();
     });
     map.on('mousemove', (e: L.LeafletMouseEvent) => {
-      if (start && preview) preview.setBounds(L.latLngBounds(start, e.latlng));
+      if (!placingRef.current || !pts.length) return;
+      rubber = e.latlng;
+      redraw();
     });
-    map.on('mouseup', (e: L.LeafletMouseEvent) => {
-      if (!start) return;
-      const box = boxFrom(start, e.latlng);
-      start = null;
-      preview?.remove();
-      preview = null;
-      map.dragging.enable();
-      setPlacing(false);
-      // A bare click gets the default-sized box round it.
-      const small = box[2] - box[0] < MIN_SPAN || box[3] - box[1] < MIN_SPAN;
-      const bounds = small
-        ? boundsOf({ id: '', code: '', name: '', lat: e.latlng.lat, lng: e.latlng.lng })
-        : box;
-      setDraft({ id: uid(), code: '', name: '', bounds, isNew: true });
-    });
+    const keys = (e: KeyboardEvent) => {
+      if (!placingRef.current) return;
+      if (e.key === 'Enter') finish();
+      else if (e.key === 'Escape') {
+        reset();
+        setPlacing(false);
+      } else if (e.key === 'Backspace' && pts.length) {
+        pts.pop();
+        setDrawn(pts.length);
+        redraw();
+      }
+    };
+    window.addEventListener('keydown', keys);
     mapRef.current = map;
     return () => {
+      window.removeEventListener('keydown', keys);
       map.remove();
       mapRef.current = null;
       layerRef.current = null;
@@ -140,12 +171,15 @@ export default function MapView() {
     if (el) el.style.cursor = placing ? 'crosshair' : '';
   }, [placing]);
 
-  const commitBounds = (id: string, bounds: Bounds) =>
+  const commitPoints = (id: string, points: Pt[]) =>
     update((s) => {
       const t = s.buildings.find((x) => x.id === id);
       if (t) {
+        const rounded = points.map(([a, b]) => [Number(a.toFixed(6)), Number(b.toFixed(6))] as Pt);
+        const bounds = boundsFromPoints(rounded);
         const c = centreOf(bounds);
-        t.bounds = bounds.map((n) => Number(n.toFixed(6))) as Bounds;
+        t.points = rounded;
+        t.bounds = bounds;
         t.lat = Number(c.lat.toFixed(6));
         t.lng = Number(c.lng.toFixed(6));
       }
@@ -159,21 +193,15 @@ export default function MapView() {
     layer.clearLayers();
     for (const b of buildings) {
       const kind = nextHit?.hit?.building.id === b.id ? 'next' : todayIds.has(b.id) ? 'today' : 'idle';
-      const bb = boundsOf(b);
+      const pts = pointsOf(b);
       const chosen = b.id === selId;
-      const rect = L.rectangle(
-        [
-          [bb[0], bb[1]],
-          [bb[2], bb[3]],
-        ],
-        {
-          color: COLOURS[kind],
-          weight: chosen ? 3 : 2,
-          fillColor: COLOURS[kind],
-          fillOpacity: kind === 'idle' ? 0.15 : 0.3,
-          bubblingMouseEvents: false,
-        },
-      );
+      const rect = L.polygon(pts, {
+        color: COLOURS[kind],
+        weight: chosen ? 3 : 2,
+        fillColor: COLOURS[kind],
+        fillOpacity: kind === 'idle' ? 0.15 : 0.3,
+        bubblingMouseEvents: false,
+      });
       rect.bindTooltip(label(b.code || b.name.slice(0, 3)), {
         permanent: true,
         direction: 'center',
@@ -186,39 +214,39 @@ export default function MapView() {
       layer.addLayer(rect);
 
       if (!chosen) continue;
-      // Corner handles resize against the opposite corner; the middle one moves the box.
-      const corners: [number, number, 0 | 2, 1 | 3][] = [
-        [bb[0], bb[1], 2, 3],
-        [bb[0], bb[3], 2, 1],
-        [bb[2], bb[1], 0, 3],
-        [bb[2], bb[3], 0, 1],
-      ];
-      for (const [lat, lng, oLat, oLng] of corners) {
-        const m = L.marker([lat, lng], { icon: handleIcon(), draggable: true, zIndexOffset: 2000 });
+      // Drag a corner to move it, drag a faint midpoint to add one, right-click a corner to drop it.
+      const cur: Pt[] = pts.map((p) => [p[0], p[1]]);
+      const shape = () => rect.setLatLngs(cur.map((p) => L.latLng(p[0], p[1])));
+      cur.forEach((_, i) => {
+        const m = L.marker(cur[i], { icon: handleIcon(), draggable: true, zIndexOffset: 2000 });
         m.on('drag', () => {
           const p = m.getLatLng();
-          rect.setBounds(L.latLngBounds([p.lat, p.lng], [bb[oLat], bb[oLng]]));
+          cur[i] = [p.lat, p.lng];
+          shape();
         });
-        m.on('dragend', () => {
-          const p = m.getLatLng();
-          commitBounds(b.id, boxFrom(p, { lat: bb[oLat], lng: bb[oLng] }));
+        m.on('dragend', () => commitPoints(b.id, cur));
+        m.on('contextmenu', () => {
+          if (cur.length > 3) commitPoints(b.id, cur.filter((_, j) => j !== i));
         });
         layer.addLayer(m);
-      }
-      const c = centreOf(bb);
+        const next = cur[(i + 1) % cur.length];
+        const mid: Pt = [(cur[i][0] + next[0]) / 2, (cur[i][1] + next[1]) / 2];
+        const add = L.marker(mid, { icon: handleIcon(false, true), draggable: true, zIndexOffset: 1500 });
+        add.on('dragend', () => {
+          const p = add.getLatLng();
+          commitPoints(b.id, [...cur.slice(0, i + 1), [p.lat, p.lng], ...cur.slice(i + 1)]);
+        });
+        layer.addLayer(add);
+      });
+      const c = centreOf(boundsFromPoints(pts));
       const mover = L.marker([c.lat, c.lng], { icon: handleIcon(true), draggable: true, zIndexOffset: 2000 });
       mover.on('drag', () => {
         const p = mover.getLatLng();
-        rect.setBounds([
-          [bb[0] + p.lat - c.lat, bb[1] + p.lng - c.lng],
-          [bb[2] + p.lat - c.lat, bb[3] + p.lng - c.lng],
-        ]);
+        rect.setLatLngs(pts.map((q) => L.latLng(q[0] + p.lat - c.lat, q[1] + p.lng - c.lng)));
       });
       mover.on('dragend', () => {
         const p = mover.getLatLng();
-        const dLat = p.lat - c.lat;
-        const dLng = p.lng - c.lng;
-        commitBounds(b.id, [bb[0] + dLat, bb[1] + dLng, bb[2] + dLat, bb[3] + dLng]);
+        commitPoints(b.id, pts.map((q) => [q[0] + p.lat - c.lat, q[1] + p.lng - c.lng] as Pt));
       });
       layer.addLayer(mover);
     }
@@ -244,17 +272,11 @@ export default function MapView() {
   }, []);
 
   const edit = (b: Building) =>
-    setDraft({ id: b.id, code: b.code, name: b.name, bounds: boundsOf(b), isNew: false });
+    setDraft({ id: b.id, code: b.code, name: b.name, points: pointsOf(b), isNew: false });
 
   const fly = (b: Building) => {
     setSelId(b.id);
-    const bb = boundsOf(b);
-    mapRef.current?.flyToBounds(
-      [
-        [bb[0], bb[1]],
-        [bb[2], bb[3]],
-      ],
-      { maxZoom: 18, padding: [80, 80] },
+    mapRef.current?.flyToBounds(pointsOf(b), { maxZoom: 18, padding: [80, 80] },
     );
   };
 
@@ -264,7 +286,7 @@ export default function MapView() {
       id: uid(),
       code: location.split(/[\s\-/,]/)[0]?.slice(0, 2).toUpperCase() ?? '',
       name: '',
-      bounds: boundsOf({ id: '', code: '', name: '', lat: c?.lat ?? UK_CENTRE[0], lng: c?.lng ?? UK_CENTRE[1] }),
+      points: pointsOf({ id: '', code: '', name: '', lat: c?.lat ?? UK_CENTRE[0], lng: c?.lng ?? UK_CENTRE[1] }),
       isNew: true,
     });
   };
@@ -273,7 +295,8 @@ export default function MapView() {
 
   const save = () => {
     if (!draft || !valid) return;
-    const c = centreOf(draft.bounds);
+    const bounds = boundsFromPoints(draft.points);
+    const c = centreOf(bounds);
     update((s) => {
       const old = s.buildings.find((x) => x.id === draft.id);
       const b: Building = {
@@ -283,7 +306,8 @@ export default function MapView() {
         name: draft.name.trim() || draft.code.trim(),
         lat: Number(c.lat.toFixed(6)),
         lng: Number(c.lng.toFixed(6)),
-        bounds: draft.bounds,
+        bounds,
+        points: draft.points,
       };
       const i = s.buildings.findIndex((x) => x.id === b.id);
       if (i >= 0) s.buildings[i] = b;
@@ -291,7 +315,7 @@ export default function MapView() {
     });
     setSelId(draft.id);
     setDraft(null);
-    if (draft.isNew) fly({ id: draft.id, code: '', name: '', lat: c.lat, lng: c.lng, bounds: draft.bounds });
+    if (draft.isNew) fly({ id: draft.id, code: '', name: '', lat: c.lat, lng: c.lng, bounds, points: draft.points });
   };
 
   const selected = buildings.find((b) => b.id === selId) ?? null;
@@ -303,11 +327,28 @@ export default function MapView() {
           <button
             className={placing ? 'btn primary' : 'btn'}
             onClick={() => setPlacing((v) => !v)}
-            title="Then drag a box over the building on the map"
+            title="Then click the building's corners on the map"
           >
-            {placing ? 'Drag a box…' : '+ Building'}
+            {placing ? 'Click corners…' : '+ Building'}
           </button>
-          <span className="tiny dim">drag out a box</span>
+          {placing ? (
+            <>
+              <button className="btn sm" disabled={drawn < 3} onClick={() => finishRef.current()}>
+                Finish
+              </button>
+              <button
+                className="btn ghost sm"
+                onClick={() => {
+                  cancelRef.current();
+                  setPlacing(false);
+                }}
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <span className="tiny dim">click out the corners</span>
+          )}
         </div>
 
         {selected && (
@@ -320,7 +361,7 @@ export default function MapView() {
               {selected.floors?.length
                 ? `${selected.floors.length} floor${selected.floors.length > 1 ? 's' : ''}, ${selected.floors.reduce((n, f) => n + f.rooms.length, 0)} rooms`
                 : 'No floor plans yet'}
-              . Drag the corners to resize.
+              . Drag corners to reshape, drag the faint dots to add one, right-click a corner to remove it.
             </div>
             <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
               <button className="btn sm primary" onClick={() => setPlans({ id: selected.id })}>
@@ -410,7 +451,7 @@ export default function MapView() {
         </div>
         {buildings.length === 0 ? (
           <Empty title="No buildings yet">
-            Press + Building and drag a box over it on the map. Use the two-letter code your rooms use ("RC" for
+            Press + Building and click its corners on the map (Enter or the first point closes it). Use the two-letter code your rooms use ("RC" for
             RC426) and sessions will link to it.
             {unmatched.length > 0 ? ` You have ${unmatched.length} location${unmatched.length > 1 ? 's' : ''} waiting.` : ''}
           </Empty>
@@ -487,7 +528,7 @@ export default function MapView() {
               />
             </Field>
           </div>
-          <div className="tiny dim">Resize or move the box by selecting the building and dragging its handles.</div>
+          <div className="tiny dim">Reshape or move the outline by selecting the building and dragging its handles.</div>
         </Modal>
       )}
 

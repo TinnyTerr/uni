@@ -464,8 +464,9 @@ table.data tr.clickable:hover td { background: var(--bg-3); cursor: pointer; }
   font: 600 11px/1.2 ui-monospace, monospace; color: #1b2030; text-shadow: 0 0 3px #fff, 0 0 3px #fff;
 }
 .map-label::before { display: none; }
-.map-handle { width: 14px; height: 14px; border-radius: 3px; background: #fff; border: 2px solid var(--accent); box-shadow: 0 1px 4px rgba(0,0,0,.5); cursor: nwse-resize; }
+.map-handle { width: 14px; height: 14px; border-radius: 3px; background: #fff; border: 2px solid var(--accent); box-shadow: 0 1px 4px rgba(0,0,0,.5); cursor: pointer; }
 .map-handle.centre { border-radius: 50%; cursor: move; }
+.map-handle.mid { width: 10px; height: 10px; margin: 2px; border-radius: 50%; opacity: .55; cursor: copy; }
 
 /* ---- floor plans ---- */
 .plan-bar { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
@@ -479,7 +480,7 @@ table.data tr.clickable:hover td { background: var(--bg-3); cursor: pointer; }
 .plan-room.lit { fill: #ffd54a; fill-opacity: .6; stroke: #ffd54a; stroke-opacity: 1; stroke-width: 4; }
 .plan-label { fill: var(--text); font: 600 18px ui-monospace, monospace; pointer-events: none; }
 .plan-label.small { font-size: 15px; }
-.plan-handle { fill: #fff; stroke: var(--accent); stroke-width: 2; cursor: nwse-resize; }
+.plan-handle { fill: #fff; stroke: var(--accent); stroke-width: 2; cursor: pointer; }
 .plan-exit { fill: #4fae86; stroke: #fff; stroke-width: 2; }
 .plan-pass { fill: #c98a3e; stroke: #fff; stroke-width: 2; }
 .plan-exit.sel, .plan-pass.sel { stroke: var(--accent); stroke-width: 4; }

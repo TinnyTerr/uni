@@ -155,12 +155,12 @@ goes into `plugins.updater.pubkey` in `src-tauri/tauri.conf.json`.
   one-off events. Shows which teaching week of which term you're looking at.
 - **Timetable** — the weekly grid. Sessions repeat across a term and can be
   restricted to particular teaching weeks (`1-5, 7, 9-11`).
-- **Campus map** — drag a bounding box over each building on an OpenStreetMap
+- **Campus map** — click out the outline of each building on an OpenStreetMap
   map; select one to resize or move it by its handles. A session's location is
   matched to a building by its code or name ("MB 2.14"), or by the compact room
   code: two-letter building, floor, room, so `RC426` is the Royal College, floor
   4, room 26. The next class is highlighted with a directions link, and Today and
-  the map warn when the walk (edge to edge between boxes) between back-to-back
+  the map warn when the walk (edge to edge between outlines, by bounding box) between back-to-back
   sessions is longer than the gap. Tiles you have viewed are cached for offline
   use on the phone install.
 - **Floor plans** — per building, add floors and draw rooms as rectangles

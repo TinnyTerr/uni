@@ -143,7 +143,7 @@ export interface Floor {
 }
 
 /**
- * A campus building: a box on the map. Rooms are "<code><floor><room>", so
+ * A campus building: an outline on the map. Rooms are "<code><floor><room>", so
  * RC426 is room 26 on floor 4 of the building coded RC.
  */
 export interface Building {
@@ -156,6 +156,8 @@ export interface Building {
   lng: number;
   /** [south, west, north, east]. Older saves have none and get a default box. */
   bounds?: [number, number, number, number];
+  /** Outline as [lat, lng] corners, at least 3. `bounds` is its bounding box. Absent on older saves. */
+  points?: [number, number][];
   floors?: Floor[];
 }
 

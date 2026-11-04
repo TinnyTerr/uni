@@ -1,6 +1,6 @@
 /** Building resolution, walking time, and the iCalendar round trip. */
 import { emptyState, type AppState, type Building } from '../src/lib/types';
-import { resolveBuilding, walkMinutes, transitionsOn } from '../src/lib/campus';
+import { resolveBuilding, walkMinutes, transitionsOn, parseRoomCode, findRoom, passageBetween, boundsOf } from '../src/lib/campus';
 import { buildIcs, parseIcs, mergeImported } from '../src/lib/ical';
 
 let failures = 0;
@@ -22,6 +22,26 @@ ok('code must start a word', resolveBuilding('LAMB LAB', all) === null);
 ok('no location, no match', resolveBuilding('', all) === null);
 ok('walk is at least a minute', walkMinutes(mb, rb) >= 1);
 ok('farther is longer', walkMinutes(mb, far) > walkMinutes(mb, rb));
+
+// RC426: building RC, floor 4, room 26.
+const rc: Building = {
+  id: 'b4', code: 'RC', name: 'Royal College', lat: 55.8620, lng: -4.2447,
+  floors: [{ id: 'f4', level: 4, w: 100, h: 100, connectors: [{ id: 'p1', kind: 'passage', label: 'to LB', x: 0, y: 0, linkTo: 'p2' }],
+    rooms: [{ id: 'r', code: '26', name: '', x: 0, y: 0, w: 10, h: 10 }] }],
+};
+const lb: Building = {
+  id: 'b5', code: 'LB', name: 'Livingstone', lat: 55.8624, lng: -4.2447,
+  floors: [{ id: 'f0', level: 0, w: 100, h: 100, rooms: [], connectors: [{ id: 'p2', kind: 'passage', label: 'to RC', x: 0, y: 0, linkTo: 'p1' }] }],
+};
+const camp = [rc, lb, mb];
+ok('RC426 is floor 4 room 26', parseRoomCode('RC426', camp)?.ref.floor === 4 && parseRoomCode('RC426', camp)?.ref.room === '26');
+ok('room codes are case blind', parseRoomCode('rc426', camp)?.building.id === 'b4');
+ok('unknown prefix is not a room', parseRoomCode('XX426', camp) === null);
+ok('resolves to the building', resolveBuilding('RC426', camp)?.building.id === 'b4');
+ok('plan room is found', findRoom('RC426', camp)?.room.id === 'r');
+ok('missing plan room is null', findRoom('RC427', camp) === null);
+ok('passage joins the buildings', passageBetween(rc, lb) !== null && passageBetween(rc, mb) === null);
+ok('default box surrounds the pin', (() => { const b = boundsOf(rc); return b[0] < rc.lat && b[2] > rc.lat && b[1] < rc.lng && b[3] > rc.lng; })());
 
 // A Monday term with two back-to-back sessions in different buildings.
 const s: AppState = emptyState();

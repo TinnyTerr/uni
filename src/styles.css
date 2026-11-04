@@ -459,13 +459,32 @@ table.data tr.clickable:hover td { background: var(--bg-3); cursor: pointer; }
 .map-row:hover { background: var(--bg-3); }
 .map-row .ico-btn { color: var(--muted); padding: 0 4px; }
 .map-row .ico-btn:hover { color: var(--text); }
-.map-pin {
-  transform: translate(-50%, -100%); white-space: nowrap;
-  padding: 2px 7px; border-radius: 10px; font: 600 11px/1.5 ui-monospace, monospace;
-  background: #fff; color: #222; border: 2px solid #8a93a6; box-shadow: 0 1px 4px rgba(0,0,0,.4);
+.map-label {
+  background: none; border: 0; box-shadow: none; padding: 0;
+  font: 600 11px/1.2 ui-monospace, monospace; color: #1b2030; text-shadow: 0 0 3px #fff, 0 0 3px #fff;
 }
-.map-pin.today { border-color: var(--accent); }
-.map-pin.next { background: var(--accent); color: #fff; border-color: #fff; }
+.map-label::before { display: none; }
+.map-handle { width: 14px; height: 14px; border-radius: 3px; background: #fff; border: 2px solid var(--accent); box-shadow: 0 1px 4px rgba(0,0,0,.5); cursor: nwse-resize; }
+.map-handle.centre { border-radius: 50%; cursor: move; }
+
+/* ---- floor plans ---- */
+.plan-bar { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.plan-bar .spacer { flex: 1; }
+.plan-grid { display: flex; gap: 14px; align-items: flex-start; }
+.plan-svg { flex: 1; min-width: 0; max-height: 62vh; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-3); touch-action: none; user-select: none; }
+.plan-svg.drawing { cursor: crosshair; }
+.plan-bg { fill: transparent; }
+.plan-room { fill: var(--accent); fill-opacity: .18; stroke: var(--text); stroke-opacity: .55; stroke-width: 2; cursor: move; }
+.plan-room.sel { stroke: var(--accent); stroke-opacity: 1; stroke-width: 3; fill-opacity: .3; }
+.plan-room.lit { fill: #ffd54a; fill-opacity: .6; stroke: #ffd54a; stroke-opacity: 1; stroke-width: 4; }
+.plan-label { fill: var(--text); font: 600 18px ui-monospace, monospace; pointer-events: none; }
+.plan-label.small { font-size: 15px; }
+.plan-handle { fill: #fff; stroke: var(--accent); stroke-width: 2; cursor: nwse-resize; }
+.plan-exit { fill: #4fae86; stroke: #fff; stroke-width: 2; }
+.plan-pass { fill: #c98a3e; stroke: #fff; stroke-width: 2; }
+.plan-exit.sel, .plan-pass.sel { stroke: var(--accent); stroke-width: 4; }
+.plan-side { width: 220px; flex: none; display: flex; flex-direction: column; gap: 10px; }
+@media (max-width: 760px) { .plan-grid { flex-direction: column; } .plan-side { width: auto; } }
 [data-theme='dark'] .map-host .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.85); }
 @media (max-width: 760px) {
   .map-view { flex-direction: column-reverse; }

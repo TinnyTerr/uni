@@ -7,32 +7,45 @@ import { occurrencesOn } from '../lib/occurrences';
 import {
   TILE_ATTRIBUTION,
   TILE_URL,
+  boundsOf,
+  boxFrom,
+  centreOf,
   directionsUrl,
+  findRoom,
   resolveBuilding,
   transitionsOn,
   walkMinutes,
+  type Bounds,
 } from '../lib/campus';
 import type { Building } from '../lib/types';
 import { ConfirmButton, Empty, Field, Modal } from '../components/ui';
+import FloorPlans from './FloorPlans';
 
 interface Draft {
   id: string;
   code: string;
   name: string;
-  lat: string;
-  lng: string;
+  bounds: Bounds;
   isNew: boolean;
 }
 
+/** Smallest box a drag may make, in degrees (about 5 m); anything less is a click. */
+const MIN_SPAN = 0.00005;
+
 const UK_CENTRE: L.LatLngTuple = [54.0, -2.5];
 
-function pinIcon(code: string, state: 'next' | 'today' | 'idle') {
+const COLOURS = { next: '#ffffff', today: '#5b8def', idle: '#8a93a6' } as const;
+
+function handleIcon(centre = false) {
   return L.divIcon({
     className: '',
-    iconSize: [0, 0],
-    html: `<div class="map-pin ${state}"><span>${code.replace(/[<>&"]/g, '')}</span></div>`,
+    iconSize: [14, 14],
+    iconAnchor: [7, 7],
+    html: `<div class="map-handle${centre ? ' centre' : ''}"></div>`,
   });
 }
+
+const label = (code: string) => code.replace(/[<>&"]/g, '');
 
 export default function MapView() {
   const { state, update } = useStore();
@@ -41,6 +54,8 @@ export default function MapView() {
   const layerRef = useRef<L.LayerGroup | null>(null);
   const [placing, setPlacing] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [selId, setSelId] = useState<string | null>(null);
+  const [plans, setPlans] = useState<{ id: string; level?: number; room?: string } | null>(null);
   const placingRef = useRef(false);
   placingRef.current = placing;
   const fitted = useRef(false);
@@ -78,17 +93,32 @@ export default function MapView() {
     const map = L.map(hostRef.current, { zoomControl: true }).setView(UK_CENTRE, 6);
     L.tileLayer(TILE_URL, { attribution: TILE_ATTRIBUTION, maxZoom: 19 }).addTo(map);
     layerRef.current = L.layerGroup().addTo(map);
-    map.on('click', (e: L.LeafletMouseEvent) => {
+    // Drag out a box where the building stands.
+    let start: L.LatLng | null = null;
+    let preview: L.Rectangle | null = null;
+    map.on('mousedown', (e: L.LeafletMouseEvent) => {
       if (!placingRef.current) return;
+      start = e.latlng;
+      map.dragging.disable();
+      preview = L.rectangle(L.latLngBounds(start, start), { color: '#5b8def', weight: 2, dashArray: '4' }).addTo(map);
+    });
+    map.on('mousemove', (e: L.LeafletMouseEvent) => {
+      if (start && preview) preview.setBounds(L.latLngBounds(start, e.latlng));
+    });
+    map.on('mouseup', (e: L.LeafletMouseEvent) => {
+      if (!start) return;
+      const box = boxFrom(start, e.latlng);
+      start = null;
+      preview?.remove();
+      preview = null;
+      map.dragging.enable();
       setPlacing(false);
-      setDraft({
-        id: uid(),
-        code: '',
-        name: '',
-        lat: e.latlng.lat.toFixed(6),
-        lng: e.latlng.lng.toFixed(6),
-        isNew: true,
-      });
+      // A bare click gets the default-sized box round it.
+      const small = box[2] - box[0] < MIN_SPAN || box[3] - box[1] < MIN_SPAN;
+      const bounds = small
+        ? boundsOf({ id: '', code: '', name: '', lat: e.latlng.lat, lng: e.latlng.lng })
+        : box;
+      setDraft({ id: uid(), code: '', name: '', bounds, isNew: true });
     });
     mapRef.current = map;
     return () => {
@@ -110,7 +140,18 @@ export default function MapView() {
     if (el) el.style.cursor = placing ? 'crosshair' : '';
   }, [placing]);
 
-  // Redraw pins whenever the buildings or today's plan change.
+  const commitBounds = (id: string, bounds: Bounds) =>
+    update((s) => {
+      const t = s.buildings.find((x) => x.id === id);
+      if (t) {
+        const c = centreOf(bounds);
+        t.bounds = bounds.map((n) => Number(n.toFixed(6))) as Bounds;
+        t.lat = Number(c.lat.toFixed(6));
+        t.lng = Number(c.lng.toFixed(6));
+      }
+    });
+
+  // Redraw boxes whenever the buildings or today's plan change.
   useEffect(() => {
     const map = mapRef.current;
     const layer = layerRef.current;
@@ -118,78 +159,142 @@ export default function MapView() {
     layer.clearLayers();
     for (const b of buildings) {
       const kind = nextHit?.hit?.building.id === b.id ? 'next' : todayIds.has(b.id) ? 'today' : 'idle';
-      const m = L.marker([b.lat, b.lng], {
-        icon: pinIcon(b.code || b.name.slice(0, 3), kind),
-        draggable: true,
-        title: b.name,
-        zIndexOffset: kind === 'next' ? 1000 : kind === 'today' ? 500 : 0,
+      const bb = boundsOf(b);
+      const chosen = b.id === selId;
+      const rect = L.rectangle(
+        [
+          [bb[0], bb[1]],
+          [bb[2], bb[3]],
+        ],
+        {
+          color: COLOURS[kind],
+          weight: chosen ? 3 : 2,
+          fillColor: COLOURS[kind],
+          fillOpacity: kind === 'idle' ? 0.15 : 0.3,
+          bubblingMouseEvents: false,
+        },
+      );
+      rect.bindTooltip(label(b.code || b.name.slice(0, 3)), {
+        permanent: true,
+        direction: 'center',
+        className: `map-label ${kind}`,
       });
-      m.on('dragend', () => {
-        const p = m.getLatLng();
-        update((s) => {
-          const t = s.buildings.find((x) => x.id === b.id);
-          if (t) {
-            t.lat = Number(p.lat.toFixed(6));
-            t.lng = Number(p.lng.toFixed(6));
-          }
+      rect.on('click', () => {
+        setSelId(b.id);
+      });
+      rect.on('dblclick', () => edit(b));
+      layer.addLayer(rect);
+
+      if (!chosen) continue;
+      // Corner handles resize against the opposite corner; the middle one moves the box.
+      const corners: [number, number, 0 | 2, 1 | 3][] = [
+        [bb[0], bb[1], 2, 3],
+        [bb[0], bb[3], 2, 1],
+        [bb[2], bb[1], 0, 3],
+        [bb[2], bb[3], 0, 1],
+      ];
+      for (const [lat, lng, oLat, oLng] of corners) {
+        const m = L.marker([lat, lng], { icon: handleIcon(), draggable: true, zIndexOffset: 2000 });
+        m.on('drag', () => {
+          const p = m.getLatLng();
+          rect.setBounds(L.latLngBounds([p.lat, p.lng], [bb[oLat], bb[oLng]]));
         });
+        m.on('dragend', () => {
+          const p = m.getLatLng();
+          commitBounds(b.id, boxFrom(p, { lat: bb[oLat], lng: bb[oLng] }));
+        });
+        layer.addLayer(m);
+      }
+      const c = centreOf(bb);
+      const mover = L.marker([c.lat, c.lng], { icon: handleIcon(true), draggable: true, zIndexOffset: 2000 });
+      mover.on('drag', () => {
+        const p = mover.getLatLng();
+        rect.setBounds([
+          [bb[0] + p.lat - c.lat, bb[1] + p.lng - c.lng],
+          [bb[2] + p.lat - c.lat, bb[3] + p.lng - c.lng],
+        ]);
       });
-      m.on('click', () => edit(b));
-      layer.addLayer(m);
+      mover.on('dragend', () => {
+        const p = mover.getLatLng();
+        const dLat = p.lat - c.lat;
+        const dLng = p.lng - c.lng;
+        commitBounds(b.id, [bb[0] + dLat, bb[1] + dLng, bb[2] + dLat, bb[3] + dLng]);
+      });
+      layer.addLayer(mover);
     }
     if (!fitted.current && buildings.length) {
       fitted.current = true;
-      map.fitBounds(L.latLngBounds(buildings.map((b) => [b.lat, b.lng] as L.LatLngTuple)), {
-        padding: [60, 60],
-        maxZoom: 17,
-      });
+      const all = buildings.map(boundsOf);
+      map.fitBounds(
+        L.latLngBounds(all.flatMap((x) => [[x[0], x[1]] as L.LatLngTuple, [x[2], x[3]] as L.LatLngTuple])),
+        { padding: [60, 60], maxZoom: 17 },
+      );
     }
-  }, [buildings, nextHit, todayIds]);
+  }, [buildings, nextHit, todayIds, selId]);
+
+  // Clicking empty map deselects.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const off = () => !placingRef.current && setSelId(null);
+    map.on('click', off);
+    return () => {
+      map.off('click', off);
+    };
+  }, []);
 
   const edit = (b: Building) =>
-    setDraft({ id: b.id, code: b.code, name: b.name, lat: String(b.lat), lng: String(b.lng), isNew: false });
+    setDraft({ id: b.id, code: b.code, name: b.name, bounds: boundsOf(b), isNew: false });
 
-  const fly = (b: Building) => mapRef.current?.flyTo([b.lat, b.lng], Math.max(mapRef.current.getZoom(), 17));
+  const fly = (b: Building) => {
+    setSelId(b.id);
+    const bb = boundsOf(b);
+    mapRef.current?.flyToBounds(
+      [
+        [bb[0], bb[1]],
+        [bb[2], bb[3]],
+      ],
+      { maxZoom: 18, padding: [80, 80] },
+    );
+  };
 
   const startFor = (location: string) => {
     const c = mapRef.current?.getCenter();
     setDraft({
       id: uid(),
-      code: location.split(/[\s\-/,]/)[0] ?? '',
+      code: location.split(/[\s\-/,]/)[0]?.slice(0, 2).toUpperCase() ?? '',
       name: '',
-      lat: (c?.lat ?? UK_CENTRE[0]).toFixed(6),
-      lng: (c?.lng ?? UK_CENTRE[1]).toFixed(6),
+      bounds: boundsOf({ id: '', code: '', name: '', lat: c?.lat ?? UK_CENTRE[0], lng: c?.lng ?? UK_CENTRE[1] }),
       isNew: true,
     });
   };
 
-  const lat = Number(draft?.lat);
-  const lng = Number(draft?.lng);
-  const valid =
-    !!draft &&
-    (draft.code.trim() !== '' || draft.name.trim() !== '') &&
-    Number.isFinite(lat) &&
-    Number.isFinite(lng) &&
-    Math.abs(lat) <= 90 &&
-    Math.abs(lng) <= 180;
+  const valid = !!draft && (draft.code.trim() !== '' || draft.name.trim() !== '');
 
   const save = () => {
     if (!draft || !valid) return;
-    const b: Building = {
-      id: draft.id,
-      code: draft.code.trim(),
-      name: draft.name.trim() || draft.code.trim(),
-      lat,
-      lng,
-    };
+    const c = centreOf(draft.bounds);
     update((s) => {
+      const old = s.buildings.find((x) => x.id === draft.id);
+      const b: Building = {
+        ...old,
+        id: draft.id,
+        code: draft.code.trim(),
+        name: draft.name.trim() || draft.code.trim(),
+        lat: Number(c.lat.toFixed(6)),
+        lng: Number(c.lng.toFixed(6)),
+        bounds: draft.bounds,
+      };
       const i = s.buildings.findIndex((x) => x.id === b.id);
       if (i >= 0) s.buildings[i] = b;
       else s.buildings.push(b);
     });
+    setSelId(draft.id);
     setDraft(null);
-    if (draft.isNew) mapRef.current?.flyTo([lat, lng], Math.max(mapRef.current.getZoom(), 17));
+    if (draft.isNew) fly({ id: draft.id, code: '', name: '', lat: c.lat, lng: c.lng, bounds: draft.bounds });
   };
+
+  const selected = buildings.find((b) => b.id === selId) ?? null;
 
   return (
     <div className="map-view">
@@ -198,12 +303,38 @@ export default function MapView() {
           <button
             className={placing ? 'btn primary' : 'btn'}
             onClick={() => setPlacing((v) => !v)}
-            title="Then click the map where the building is"
+            title="Then drag a box over the building on the map"
           >
-            {placing ? 'Click the map…' : '+ Building'}
+            {placing ? 'Drag a box…' : '+ Building'}
           </button>
-          <span className="tiny dim">drag a pin to move it</span>
+          <span className="tiny dim">drag out a box</span>
         </div>
+
+        {selected && (
+          <div className="map-card">
+            <div className="tiny dim">Selected</div>
+            <div>
+              <b className="mono">{selected.code}</b> {selected.name}
+            </div>
+            <div className="tiny muted">
+              {selected.floors?.length
+                ? `${selected.floors.length} floor${selected.floors.length > 1 ? 's' : ''}, ${selected.floors.reduce((n, f) => n + f.rooms.length, 0)} rooms`
+                : 'No floor plans yet'}
+              . Drag the corners to resize.
+            </div>
+            <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+              <button className="btn sm primary" onClick={() => setPlans({ id: selected.id })}>
+                Floor plans
+              </button>
+              <button className="btn sm" onClick={() => edit(selected)}>
+                Edit
+              </button>
+              <a className="btn sm" href={directionsUrl(selected)} target="_blank" rel="noreferrer">
+                Directions ↗
+              </a>
+            </div>
+          </div>
+        )}
 
         {nextHit?.hit && (
           <div className="map-card">
@@ -219,6 +350,17 @@ export default function MapView() {
               <button className="btn sm" onClick={() => fly(nextHit.hit!.building)}>
                 Show
               </button>
+              {findRoom(nextHit.o.location, buildings) && (
+                <button
+                  className="btn sm"
+                  onClick={() => {
+                    const r = findRoom(nextHit.o.location, buildings)!;
+                    setPlans({ id: r.building.id, level: r.floor.level, room: r.room.code });
+                  }}
+                >
+                  Find room
+                </button>
+              )}
               <a className="btn sm" href={directionsUrl(nextHit.hit.building)} target="_blank" rel="noreferrer">
                 Directions ↗
               </a>
@@ -234,7 +376,7 @@ export default function MapView() {
             {transitions.map((t) => (
               <div key={t.to.key} className="tiny" style={{ padding: '3px 0' }}>
                 {t.fromBuilding.code || t.fromBuilding.name} → {t.toBuilding.code || t.toBuilding.name}:{' '}
-                <b>{t.walk} min</b> walk, {t.gap} min gap{' '}
+                <b>{t.walk} min</b> {t.passage ? 'via passage' : 'walk'}, {t.gap} min gap{' '}
                 {t.shortBy > 0 ? (
                   <span style={{ color: 'var(--danger)' }}>· {t.shortBy} min short</span>
                 ) : (
@@ -268,8 +410,8 @@ export default function MapView() {
         </div>
         {buildings.length === 0 ? (
           <Empty title="No buildings yet">
-            Press + Building and click the map. Use the code your timetable uses ("MB" for "MB 2.14") and sessions
-            will link to it.
+            Press + Building and drag a box over it on the map. Use the two-letter code your rooms use ("RC" for
+            RC426) and sessions will link to it.
             {unmatched.length > 0 ? ` You have ${unmatched.length} location${unmatched.length > 1 ? 's' : ''} waiting.` : ''}
           </Empty>
         ) : (
@@ -334,26 +476,29 @@ export default function MapView() {
                 autoFocus
                 value={draft.code}
                 onChange={(e) => setDraft({ ...draft, code: e.target.value })}
-                placeholder="MB"
+                placeholder="RC"
               />
             </Field>
             <Field label="Name">
               <input
                 value={draft.name}
                 onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                placeholder="Maths Building"
+                placeholder="Royal College"
               />
             </Field>
           </div>
-          <div className="row">
-            <Field label="Latitude">
-              <input value={draft.lat} onChange={(e) => setDraft({ ...draft, lat: e.target.value })} />
-            </Field>
-            <Field label="Longitude">
-              <input value={draft.lng} onChange={(e) => setDraft({ ...draft, lng: e.target.value })} />
-            </Field>
-          </div>
+          <div className="tiny dim">Resize or move the box by selecting the building and dragging its handles.</div>
         </Modal>
+      )}
+
+      {plans && (
+        <FloorPlans
+          key={`${plans.id}:${plans.level ?? ''}`}
+          buildingId={plans.id}
+          startLevel={plans.level}
+          highlight={plans.room}
+          onClose={() => setPlans(null)}
+        />
       )}
     </div>
   );

@@ -155,12 +155,19 @@ goes into `plugins.updater.pubkey` in `src-tauri/tauri.conf.json`.
   one-off events. Shows which teaching week of which term you're looking at.
 - **Timetable** — the weekly grid. Sessions repeat across a term and can be
   restricted to particular teaching weeks (`1-5, 7, 9-11`).
-- **Campus map** — pin your buildings on an OpenStreetMap map. A session's
-  location ("MB 2.14") is matched to a building by its code or name, the rest
-  being the room. The next class is highlighted with a directions link, and
-  Today and the map warn when the walk between back-to-back sessions is longer
-  than the gap. Buildings sync with everything else; tiles you have viewed are
-  cached for offline use on the phone install.
+- **Campus map** — drag a bounding box over each building on an OpenStreetMap
+  map; select one to resize or move it by its handles. A session's location is
+  matched to a building by its code or name ("MB 2.14"), or by the compact room
+  code: two-letter building, floor, room, so `RC426` is the Royal College, floor
+  4, room 26. The next class is highlighted with a directions link, and Today and
+  the map warn when the walk (edge to edge between boxes) between back-to-back
+  sessions is longer than the gap. Tiles you have viewed are cached for offline
+  use on the phone install.
+- **Floor plans** — per building, add floors and draw rooms as rectangles
+  (optionally over an uploaded plan image), plus exits and passages. A passage
+  is linked to its other end in another building, which makes the walk between
+  the two indoors and straight-line. "Find room" on the next class opens the
+  floor with the room lit. All of it syncs with the rest of the document.
 - **Modules** — code, title, credits, colour, lecturer, linked notes.
 - **Assessments** — deadlines with kind, weight, status and mark.
 - **Marks** — UK marking throughout. Per module: *provisional* (weighted mean
@@ -253,6 +260,7 @@ src/
     persist.ts        this device's own copy: Tauri file, or browser storage
     platform.ts       desktop or browser, and this device's identity
     dates.ts          term weeks, ISO weekdays, grids
+    campus.ts         buildings, room codes, walking time, passages
     grades.ts         UK marking: module/year/degree averages, classifications
     occurrences.ts    expands sessions + deadlines + events into calendar items
     notes/            provider interface and the local-git implementation

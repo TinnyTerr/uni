@@ -105,14 +105,58 @@ export interface CalEvent {
   uid?: string;
 }
 
-/** A campus building. Rooms are whatever follows the code in a location string. */
-export interface Building {
+/** A room on a floor plan, as a rectangle in the plan's own units. */
+export interface Room {
   id: Id;
-  /** Short code as it appears in timetables, e.g. "MB" or "Roscoe". */
+  /** The part of the code after building and floor: "26" in RC426. */
   code: string;
   name: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * A way out of the plan. An exit leads outside; a passage leads into another
+ * building, and `linkTo` names the connector at the far end.
+ */
+export interface Connector {
+  id: Id;
+  kind: 'exit' | 'passage';
+  label: string;
+  x: number;
+  y: number;
+  linkTo?: Id;
+}
+
+/** One level of a building. `level` 0 is the ground floor. */
+export interface Floor {
+  id: Id;
+  level: number;
+  /** Optional scanned plan, as a data URL. Rooms are drawn over it. */
+  image?: string;
+  w: number;
+  h: number;
+  rooms: Room[];
+  connectors: Connector[];
+}
+
+/**
+ * A campus building: a box on the map. Rooms are "<code><floor><room>", so
+ * RC426 is room 26 on floor 4 of the building coded RC.
+ */
+export interface Building {
+  id: Id;
+  /** Short code as it appears in timetables, e.g. "RC" or "Roscoe". */
+  code: string;
+  name: string;
+  /** Centre of the box; kept in step with `bounds` and used for walking time. */
   lat: number;
   lng: number;
+  /** [south, west, north, east]. Older saves have none and get a default box. */
+  bounds?: [number, number, number, number];
+  floors?: Floor[];
 }
 
 export interface NotesRoot {

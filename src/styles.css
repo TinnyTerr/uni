@@ -474,6 +474,7 @@ table.data tr.clickable:hover td { background: var(--bg-3); cursor: pointer; }
 .plan-grid { display: flex; gap: 14px; align-items: flex-start; }
 .plan-svg { flex: 1; min-width: 0; max-height: 62vh; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-3); touch-action: none; user-select: none; }
 .plan-svg.drawing { cursor: crosshair; }
+.plan-svg.moving { cursor: move; }
 .plan-bg { fill: transparent; }
 .plan-room { fill: var(--accent); fill-opacity: .18; stroke: var(--text); stroke-opacity: .55; stroke-width: 2; cursor: move; }
 .plan-room.sel { stroke: var(--accent); stroke-opacity: 1; stroke-width: 3; fill-opacity: .3; }

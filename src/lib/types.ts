@@ -138,6 +138,9 @@ export interface Floor {
   level: number;
   /** Optional scanned plan, as a data URL. Rooms are drawn over it. */
   image?: string;
+  /** Where the plan image sits relative to the floor's top-left; both default to 0. */
+  imageX?: number;
+  imageY?: number;
   w: number;
   h: number;
   rooms: Room[];

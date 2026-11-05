@@ -4,7 +4,7 @@ import { allConnectors, centroidOf, roomCodeOf, roomPointsOf, setRoomPoints, typ
 import type { Building, Connector, Floor, Room } from '../lib/types';
 import { ConfirmButton, Field, Modal } from '../components/ui';
 
-type Tool = 'select' | 'room' | 'exit' | 'passage';
+type Tool = 'select' | 'room' | 'exit' | 'passage' | 'image';
 
 const DEFAULT_W = 1000;
 const DEFAULT_H = 700;
@@ -14,7 +14,8 @@ type Drag =
   | { kind: 'draw'; x0: number; y0: number; x1: number; y1: number }
   | { kind: 'move'; id: string; x0: number; y0: number; orig: Pt[] }
   | { kind: 'vertex'; id: string; i: number }
-  | { kind: 'point'; id: string };
+  | { kind: 'point'; id: string }
+  | { kind: 'image'; x0: number; y0: number; ox: number; oy: number };
 
 /** Read an image and shrink it so a floor plan does not bloat the synced document. */
 async function loadImage(file: File): Promise<{ url: string; w: number; h: number }> {
@@ -109,6 +110,9 @@ export default function FloorPlans({
     if (tool === 'room') {
       (e.currentTarget as Element).setPointerCapture(e.pointerId);
       setDrag({ kind: 'draw', x0: p.x, y0: p.y, x1: p.x, y1: p.y });
+    } else if (tool === 'image') {
+      (e.currentTarget as Element).setPointerCapture(e.pointerId);
+      setDrag({ kind: 'image', x0: p.x, y0: p.y, ox: floor.imageX ?? 0, oy: floor.imageY ?? 0 });
     } else if (tool === 'exit' || tool === 'passage') {
       const c: Connector = {
         id: uid(),
@@ -127,7 +131,12 @@ export default function FloorPlans({
     if (!drag || !floor) return;
     const p = point(e);
     if (drag.kind === 'draw') setDrag({ ...drag, x1: p.x, y1: p.y });
-    else if (drag.kind === 'move') {
+    else if (drag.kind === 'image') {
+      editFloor((f) => {
+        f.imageX = Math.round(drag.ox + p.x - drag.x0);
+        f.imageY = Math.round(drag.oy + p.y - drag.y0);
+      });
+    } else if (drag.kind === 'move') {
       editFloor((f) => {
         const r = f.rooms.find((x) => x.id === drag.id);
         if (!r) return;
@@ -196,7 +205,9 @@ export default function FloorPlans({
         f.image = img.url;
         f.w = img.w;
         f.h = img.h;
-        // Rooms drawn before the image existed keep their relative place.
+        // A new scan starts in the top-left corner; rooms drawn before it keep their place.
+        delete f.imageX;
+        delete f.imageY;
       });
     } catch {
       /* not an image: leave the plan alone */
@@ -249,6 +260,7 @@ export default function FloorPlans({
                 ['room', 'Draw room'],
                 ['exit', 'Exit'],
                 ['passage', 'Passage'],
+                ...(floor.image ? ([['image', 'Move image']] as [Tool, string][]) : []),
               ] as [Tool, string][]
             ).map(([t, label]) => (
               <button key={t} className={tool === t ? 'btn primary sm' : 'btn sm'} onClick={() => setTool(t)}>
@@ -270,7 +282,17 @@ export default function FloorPlans({
               {floor.image ? 'Replace plan image' : 'Trace over an image'}
             </button>
             {floor.image && (
-              <button className="btn ghost sm" onClick={() => editFloor((f) => delete f.image)}>
+              <button
+                className="btn ghost sm"
+                onClick={() => {
+                  editFloor((f) => {
+                    delete f.image;
+                    delete f.imageX;
+                    delete f.imageY;
+                  });
+                  setTool('select');
+                }}
+              >
                 Remove image
               </button>
             )}
@@ -279,7 +301,7 @@ export default function FloorPlans({
           <div className="plan-grid">
             <svg
               ref={svgRef}
-              className={`plan-svg ${tool !== 'select' ? 'drawing' : ''}`}
+              className={`plan-svg ${tool === 'image' ? 'moving' : tool !== 'select' ? 'drawing' : ''}`}
               viewBox={`0 0 ${floor.w} ${floor.h}`}
               onPointerMove={onMove}
               onPointerUp={onUp}
@@ -288,8 +310,8 @@ export default function FloorPlans({
               {floor.image && (
                 <image
                   href={floor.image}
-                  x={0}
-                  y={0}
+                  x={floor.imageX ?? 0}
+                  y={floor.imageY ?? 0}
                   width={floor.w}
                   height={floor.h}
                   opacity={0.55}
@@ -509,7 +531,13 @@ export default function FloorPlans({
                   </Field>
                   <div className="tiny dim">
                     {floor.rooms.length} room{floor.rooms.length === 1 ? '' : 's'},{' '}
-                    {floor.connectors.length} exit/passage{floor.connectors.length === 1 ? '' : 's'}. Pick{' '}
+                    {floor.connectors.length} exit/passage{floor.connectors.length === 1 ? '' : 's'}.{' '}
+                    {floor.image && (
+                      <>
+                        <b>Move image</b> and drag the scan to line it up with the rooms.{' '}
+                      </>
+                    )}
+                    Pick{' '}
                     <b>Draw room</b> and drag on the plan; click a room to rename or move it. Drag its square handles to reshape, drag a round one to add a corner, right-click a corner to remove it.
                   </div>
                   <ConfirmButton

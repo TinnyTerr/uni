@@ -164,7 +164,7 @@ goes into `plugins.updater.pubkey` in `src-tauri/tauri.conf.json`.
   sessions is longer than the gap. Tiles you have viewed are cached for offline
   use on the phone install.
 - **Floor plans** — per building, add floors and draw rooms as outlines (drag corners, add or right-click remove them)
-  (optionally over an uploaded plan image), plus exits and passages. A passage
+  (optionally over an uploaded plan image, which you can drag into line with the rooms), plus exits and passages. A passage
   is linked to its other end in another building, which makes the walk between
   the two indoors and straight-line. "Find room" on the next class opens the
   floor with the room lit. All of it syncs with the rest of the document.

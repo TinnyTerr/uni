@@ -180,10 +180,14 @@ export function parseRoomCode(
   text: string,
   buildings: Building[],
 ): { building: Building; ref: RoomRef } | null {
-  const m = /^\s*(\p{L}{2})(\d)([\p{L}\p{N}]+)\s*$/u.exec(text);
-  if (!m) return null;
-  const building = buildings.find((b) => b.code.trim().toLowerCase() === m[1].toLowerCase());
-  return building ? { building, ref: { floor: Number(m[2]), room: m[3] } } : null;
+  // A location can list several rooms ("LT1201 & LT1221"); the first one that is a known building's room wins.
+  for (const part of text.split(/\s*(?:&|\+|\/|,|\band\b)\s*/i)) {
+    const m = /^\s*(\p{L}{2})(\d)([\p{L}\p{N}]+)\s*$/u.exec(part);
+    if (!m) continue;
+    const building = buildings.find((b) => b.code.trim().toLowerCase() === m[1].toLowerCase());
+    if (building) return { building, ref: { floor: Number(m[2]), room: m[3] } };
+  }
+  return null;
 }
 
 /** The room numbers an outline answers to: a room code may list several, comma separated. */

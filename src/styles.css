@@ -478,6 +478,7 @@ table.data tr.clickable:hover td { background: var(--bg-3); cursor: pointer; }
 .plan-bg { fill: transparent; }
 .plan-room { fill: var(--accent); fill-opacity: .18; stroke: var(--text); stroke-opacity: .55; stroke-width: 2; cursor: move; }
 .plan-room.sel { stroke: var(--accent); stroke-opacity: 1; stroke-width: 3; fill-opacity: .3; }
+.plan-pending { fill: none; stroke: var(--accent); stroke-width: 2; stroke-dasharray: 6 4; }
 .plan-room.lit { fill: #ffd54a; fill-opacity: .6; stroke: #ffd54a; stroke-opacity: 1; stroke-width: 4; }
 .plan-label { fill: var(--text); font: 600 18px ui-monospace, monospace; pointer-events: none; }
 .plan-label.small { font-size: 15px; }

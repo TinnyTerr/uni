@@ -8,10 +8,10 @@ type Tool = 'select' | 'room' | 'exit' | 'passage' | 'image';
 
 const DEFAULT_W = 1000;
 const DEFAULT_H = 700;
-const MIN_ROOM = 12;
+/** How close (in plan units) a click must land on the first corner to close a room. */
+const CLOSE_R = 12;
 
 type Drag =
-  | { kind: 'draw'; x0: number; y0: number; x1: number; y1: number }
   | { kind: 'move'; id: string; x0: number; y0: number; orig: Pt[] }
   | { kind: 'vertex'; id: string; i: number }
   | { kind: 'point'; id: string }
@@ -60,6 +60,9 @@ export default function FloorPlans({
   const [tool, setTool] = useState<Tool>('select');
   const [sel, setSel] = useState<string | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
+  /** Corners placed so far for the room being drawn, and where the pointer is now. */
+  const [pending, setPending] = useState<Pt[]>([]);
+  const [cursor, setCursor] = useState<Pt | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -87,6 +90,23 @@ export default function FloorPlans({
     setSel(null);
   };
 
+  const pickTool = (t: Tool) => {
+    setPending([]);
+    setCursor(null);
+    setTool(t);
+  };
+
+  const finishRoom = () => {
+    if (pending.length < 3) return;
+    const room: Room = { id: uid(), code: '', name: '', x: 0, y: 0, w: 0, h: 0 };
+    setRoomPoints(room, pending);
+    editFloor((f) => f.rooms.push(room));
+    setSel(room.id);
+    setPending([]);
+    setCursor(null);
+    setTool('select');
+  };
+
   const setLevelNumber = (n: number) => {
     if (!floor || !Number.isInteger(n) || n < 0 || n > 9) return;
     if (floors.some((f) => f.level === n && f.id !== floor.id)) return;
@@ -108,8 +128,9 @@ export default function FloorPlans({
     if (!floor) return;
     const p = point(e);
     if (tool === 'room') {
-      (e.currentTarget as Element).setPointerCapture(e.pointerId);
-      setDrag({ kind: 'draw', x0: p.x, y0: p.y, x1: p.x, y1: p.y });
+      const first = pending[0];
+      if (first && pending.length >= 3 && Math.hypot(p.x - first[0], p.y - first[1]) <= CLOSE_R) return finishRoom();
+      setPending((pts) => [...pts, [Math.round(p.x), Math.round(p.y)]]);
     } else if (tool === 'image') {
       (e.currentTarget as Element).setPointerCapture(e.pointerId);
       setDrag({ kind: 'image', x0: p.x, y0: p.y, ox: floor.imageX ?? 0, oy: floor.imageY ?? 0 });
@@ -128,10 +149,11 @@ export default function FloorPlans({
   };
 
   const onMove = (e: React.PointerEvent) => {
-    if (!drag || !floor) return;
+    if (!floor) return;
     const p = point(e);
-    if (drag.kind === 'draw') setDrag({ ...drag, x1: p.x, y1: p.y });
-    else if (drag.kind === 'image') {
+    if (tool === 'room' && pending.length) setCursor([p.x, p.y]);
+    if (!drag) return;
+    if (drag.kind === 'image') {
       editFloor((f) => {
         f.imageX = Math.round(drag.ox + p.x - drag.x0);
         f.imageY = Math.round(drag.oy + p.y - drag.y0);
@@ -167,35 +189,7 @@ export default function FloorPlans({
     }
   };
 
-  const onUp = () => {
-    if (drag?.kind === 'draw') {
-      const x = Math.min(drag.x0, drag.x1);
-      const y = Math.min(drag.y0, drag.y1);
-      const w = Math.abs(drag.x1 - drag.x0);
-      const h = Math.abs(drag.y1 - drag.y0);
-      if (w >= MIN_ROOM && h >= MIN_ROOM) {
-        const room: Room = {
-          id: uid(),
-          code: '',
-          name: '',
-          x: Math.round(x),
-          y: Math.round(y),
-          w: Math.round(w),
-          h: Math.round(h),
-        };
-        setRoomPoints(room, [
-          [room.x, room.y],
-          [room.x + room.w, room.y],
-          [room.x + room.w, room.y + room.h],
-          [room.x, room.y + room.h],
-        ]);
-        editFloor((f) => f.rooms.push(room));
-        setSel(room.id);
-        setTool('select');
-      }
-    }
-    setDrag(null);
-  };
+  const onUp = () => setDrag(null);
 
   const pickImage = async (file?: File) => {
     if (!file || !floor) return;
@@ -233,6 +227,8 @@ export default function FloorPlans({
             onClick={() => {
               setLevel(f.level);
               setSel(null);
+              setPending([]);
+              setCursor(null);
             }}
           >
             Floor {f.level}
@@ -263,7 +259,7 @@ export default function FloorPlans({
                 ...(floor.image ? ([['image', 'Move image']] as [Tool, string][]) : []),
               ] as [Tool, string][]
             ).map(([t, label]) => (
-              <button key={t} className={tool === t ? 'btn primary sm' : 'btn sm'} onClick={() => setTool(t)}>
+              <button key={t} className={tool === t ? 'btn primary sm' : 'btn sm'} onClick={() => pickTool(t)}>
                 {label}
               </button>
             ))}
@@ -418,19 +414,45 @@ export default function FloorPlans({
                   </text>
                 </g>
               ))}
-              {drag?.kind === 'draw' && (
-                <rect
-                  x={Math.min(drag.x0, drag.x1)}
-                  y={Math.min(drag.y0, drag.y1)}
-                  width={Math.abs(drag.x1 - drag.x0)}
-                  height={Math.abs(drag.y1 - drag.y0)}
-                  className="plan-room sel"
-                  style={{ pointerEvents: 'none' }}
-                />
+              {tool === 'room' && pending.length > 0 && (
+                <g style={{ pointerEvents: 'none' }}>
+                  <polyline
+                    points={(cursor ? [...pending, cursor] : pending).map((q) => q.join(',')).join(' ')}
+                    className="plan-pending"
+                  />
+                  {pending.map((q, i) => (
+                    <circle key={i} cx={q[0]} cy={q[1]} r={i === 0 ? 9 : 5} className="plan-handle" />
+                  ))}
+                </g>
               )}
             </svg>
 
             <aside className="plan-side">
+              {tool === 'room' && (
+                <>
+                  <div className="tiny dim">
+                    {pending.length === 0
+                      ? 'Click on the plan to place each corner of the room.'
+                      : `${pending.length} corner${pending.length === 1 ? '' : 's'} placed. Click the first corner, or Finish, to close the room (needs 3).`}
+                  </div>
+                  <button className="btn primary sm" disabled={pending.length < 3} onClick={finishRoom}>
+                    Finish room
+                  </button>
+                  <button className="btn ghost sm" disabled={!pending.length} onClick={() => setPending((p) => p.slice(0, -1))}>
+                    Undo corner
+                  </button>
+                  <button
+                    className="btn ghost sm"
+                    disabled={!pending.length}
+                    onClick={() => {
+                      setPending([]);
+                      setCursor(null);
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </>
+              )}
               {room && (
                 <>
                   <Field label="Room" hint={`full code ${roomCodeOf(building, floor, room)}`}>
@@ -538,7 +560,7 @@ export default function FloorPlans({
                       </>
                     )}
                     Pick{' '}
-                    <b>Draw room</b> and drag on the plan; click a room to rename or move it. Drag its square handles to reshape, drag a round one to add a corner, right-click a corner to remove it.
+                    <b>Draw room</b> and click each corner on the plan, then click the first corner to close it; click a room to rename or move it. Drag its square handles to reshape, drag a round one to add a corner, right-click a corner to remove it.
                   </div>
                   <ConfirmButton
                     label="Delete floor"

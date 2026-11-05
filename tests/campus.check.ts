@@ -27,7 +27,7 @@ ok('farther is longer', walkMinutes(mb, far) > walkMinutes(mb, rb));
 const rc: Building = {
   id: 'b4', code: 'RC', name: 'Royal College', lat: 55.8620, lng: -4.2447,
   floors: [{ id: 'f4', level: 4, w: 100, h: 100, connectors: [{ id: 'p1', kind: 'passage', label: 'to LB', x: 0, y: 0, linkTo: 'p2' }],
-    rooms: [{ id: 'r', code: '26', name: '', x: 0, y: 0, w: 10, h: 10 }] }],
+    rooms: [{ id: 'r', code: '26, 27', name: '', x: 0, y: 0, w: 10, h: 10 }] }],
 };
 const lb: Building = {
   id: 'b5', code: 'LB', name: 'Livingstone', lat: 55.8624, lng: -4.2447,
@@ -39,7 +39,8 @@ ok('room codes are case blind', parseRoomCode('rc426', camp)?.building.id === 'b
 ok('unknown prefix is not a room', parseRoomCode('XX426', camp) === null);
 ok('resolves to the building', resolveBuilding('RC426', camp)?.building.id === 'b4');
 ok('plan room is found', findRoom('RC426', camp)?.room.id === 'r');
-ok('missing plan room is null', findRoom('RC427', camp) === null);
+ok('second number in a comma list is found', findRoom('RC427', camp)?.room.id === 'r');
+ok('missing plan room is null', findRoom('RC428', camp) === null);
 ok('passage joins the buildings', passageBetween(rc, lb) !== null && passageBetween(rc, mb) === null);
 ok('default box surrounds the pin', (() => { const b = boundsOf(rc); return b[0] < rc.lat && b[2] > rc.lat && b[1] < rc.lng && b[3] > rc.lng; })());
 

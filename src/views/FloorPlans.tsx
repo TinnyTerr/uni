@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { uid, useStore } from '../lib/store';
-import { allConnectors, centroidOf, roomCodeOf, roomPointsOf, setRoomPoints, type Pt } from '../lib/campus';
+import { allConnectors, centroidOf, roomCodeOf, roomNumbers, roomPointsOf, setRoomPoints, type Pt } from '../lib/campus';
 import type { Building, Connector, Floor, Room } from '../lib/types';
 import { ConfirmButton, Field, Modal } from '../components/ui';
 
@@ -211,7 +211,13 @@ export default function FloorPlans({
   const room = floor?.rooms.find((r) => r.id === sel);
   const conn = floor?.connectors.find((c) => c.id === sel);
   const dupe =
-    !!room && !!floor && floor.rooms.some((r) => r.id !== room.id && r.code && r.code.toLowerCase() === room.code.toLowerCase());
+    !!room &&
+    !!floor &&
+    floor.rooms.some(
+      (r) =>
+        r.id !== room.id &&
+        roomNumbers(r).some((n) => roomNumbers(room).some((m) => m.toLowerCase() === n.toLowerCase())),
+    );
   const others = allConnectors(state.buildings).filter(
     (x) => x.connector.kind === 'passage' && x.building.id !== building.id,
   );
@@ -315,7 +321,10 @@ export default function FloorPlans({
                 />
               )}
               {floor.rooms.map((r) => {
-                const lit = !!highlight && r.code.toLowerCase() === highlight.toLowerCase() && floor.level === startLevel;
+                const lit =
+                  !!highlight &&
+                  roomNumbers(r).some((n) => n.toLowerCase() === highlight.toLowerCase()) &&
+                  floor.level === startLevel;
                 const pts = roomPointsOf(r);
                 const [cx, cy] = centroidOf(pts);
                 return (
@@ -333,7 +342,7 @@ export default function FloorPlans({
                       }}
                     />
                     <text x={cx} y={cy} className="plan-label" textAnchor="middle" dominantBaseline="middle">
-                      {r.code ? roomCodeOf(building, floor, r) : '?'}
+                      {roomNumbers(r).length ? roomNumbers(r).join(', ') : '?'}
                     </text>
                     {r.id === sel && tool === 'select' && (
                       <>
@@ -455,7 +464,7 @@ export default function FloorPlans({
               )}
               {room && (
                 <>
-                  <Field label="Room" hint={`full code ${roomCodeOf(building, floor, room)}`}>
+                  <Field label="Room" hint={`full code ${roomCodeOf(building, floor, room) || '—'}, comma separate several`}>
                     <input
                       autoFocus
                       value={room.code}
@@ -465,7 +474,7 @@ export default function FloorPlans({
                           if (r) r.code = e.target.value.replace(/\s+/g, '');
                         })
                       }
-                      placeholder="26"
+                      placeholder="26 or 26,27"
                     />
                   </Field>
                   {dupe && <div className="tiny" style={{ color: 'var(--danger)' }}>Another room here has this code.</div>}

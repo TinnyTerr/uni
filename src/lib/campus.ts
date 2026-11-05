@@ -186,20 +186,26 @@ export function parseRoomCode(
   return building ? { building, ref: { floor: Number(m[2]), room: m[3] } } : null;
 }
 
+/** The room numbers an outline answers to: a room code may list several, comma separated. */
+export function roomNumbers(r: Room): string[] {
+  return r.code.split(',').map((c) => c.trim()).filter(Boolean);
+}
+
 export function roomCodeOf(b: Building, floor: Floor, room: Room): string {
-  return `${b.code.toUpperCase()}${floor.level}${room.code}`;
+  return roomNumbers(room).map((n) => `${b.code.toUpperCase()}${floor.level}${n}`).join(', ');
 }
 
 /** Find the plan room a location refers to, if the building has one drawn. */
 export function findRoom(
   location: string,
   buildings: Building[],
-): { building: Building; floor: Floor; room: Room } | null {
+): { building: Building; floor: Floor; room: Room; code: string } | null {
   const hit = parseRoomCode(location, buildings);
   if (!hit) return null;
+  const want = hit.ref.room.toLowerCase();
   const floor = hit.building.floors?.find((f) => f.level === hit.ref.floor);
-  const room = floor?.rooms.find((r) => r.code.toLowerCase() === hit.ref.room.toLowerCase());
-  return floor && room ? { building: hit.building, floor, room } : null;
+  const room = floor?.rooms.find((r) => roomNumbers(r).some((n) => n.toLowerCase() === want));
+  return floor && room ? { building: hit.building, floor, room, code: hit.ref.room } : null;
 }
 
 export interface Transition {

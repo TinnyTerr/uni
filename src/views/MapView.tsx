@@ -396,7 +396,7 @@ export default function MapView() {
                   className="btn sm"
                   onClick={() => {
                     const r = findRoom(nextHit.o.location, buildings)!;
-                    setPlans({ id: r.building.id, level: r.floor.level, room: r.room.code });
+                    setPlans({ id: r.building.id, level: r.floor.level, room: r.code });
                   }}
                 >
                   Find room

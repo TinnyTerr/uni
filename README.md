@@ -171,7 +171,8 @@ goes into `plugins.updater.pubkey` in `src-tauri/tauri.conf.json`.
 - **Modules** — code, title, credits, colour, lecturer, linked notes.
 - **Assessments** — deadlines with kind, weight, status and mark.
 - **Marks** — UK marking throughout. Per module: *provisional* (weighted mean
-  of marks so far), *secured* (assuming everything unmarked scores zero), and
+  of marks so far), *secured* (assuming everything unmarked scores zero, over
+  at least 100% of the module weight), and
   what you'd need across the remaining weight to land on 70 / 60 / 50. Year
   averages are credit-weighted; the degree average uses the weighting you set
   per year. Bands are 1st / 2:1 / 2:2 / 3rd.

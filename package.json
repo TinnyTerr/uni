@@ -13,7 +13,7 @@
     "app": "tauri dev",
     "dist": "tauri build",
     "typecheck": "tsc --noEmit",
-    "test": "bun run tests/sync.check.ts && bun run tests/campus.check.ts",
+    "test": "bun run tests/sync.check.ts && bun run tests/campus.check.ts && bun run tests/grades.check.ts",
     "release": "bun scripts/bump-version.mjs"
   },
   "dependencies": {

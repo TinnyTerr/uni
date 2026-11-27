@@ -119,7 +119,7 @@ export default function Marks() {
                                 <th className="right">Credits</th>
                                 <th className="right">Marked</th>
                                 <th className="right">Provisional</th>
-                                <th className="right" title="Assuming everything unmarked scores zero">
+                                <th className="right" title="Assuming everything unmarked scores zero, using at least 100% of module weight">
                                     Secured
                                 </th>
                                 <th className="right">Need for {target}%</th>
@@ -179,8 +179,8 @@ export default function Marks() {
                 )}
                 <p className="tiny dim" style={{ marginTop: 10, marginBottom: 0 }}>
                     <b>Provisional</b> is the weighted mean of the marks entered so far. <b>Secured</b> assumes
-                    everything still unmarked scores zero. <b>Need</b> is the average required across the remaining
-                    weight to finish the module on {target}%.
+                    everything still unmarked scores zero, using at least 100% of module weight. <b>Need</b> is the
+                    average required across the remaining weight to finish the module on {target}%.
                 </p>
             </div>
 

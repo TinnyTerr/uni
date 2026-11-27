@@ -24,7 +24,7 @@ export function classify(mark: number | null): Classification | null {
 export interface ModuleResult {
   /** Weighted mean of the marks entered so far, over their own weight. */
   provisional: number | null;
-  /** Mark assuming everything still unmarked scores zero. */
+  /** Mark assuming everything unmarked scores zero, across at least 100% weight. */
   secured: number | null;
   /** Percent of the module's assessment weight that has been marked. */
   marked: number;
@@ -43,7 +43,7 @@ export function moduleResult(assessments: Assessment[]): ModuleResult {
   const points = done.reduce((s, a) => s + a.weight * (a.mark as number), 0);
   return {
     provisional: points / marked,
-    secured: declared > 0 ? points / declared : null,
+    secured: points / Math.max(100, declared),
     marked,
     declared,
     count: assessments.length,
@@ -99,10 +99,11 @@ export function degreeAverage(
 
 /** What you must average on the remaining weight to reach `target`. */
 export function marksNeeded(result: ModuleResult, target: number): number | null {
-  const remaining = result.declared - result.marked;
+  const totalWeight = Math.max(100, result.declared);
+  const remaining = totalWeight - result.marked;
   if (remaining <= 0.001) return null;
   const have = result.provisional === null ? 0 : result.provisional * result.marked;
-  return (target * result.declared - have) / remaining;
+  return (target * totalWeight - have) / remaining;
 }
 
 export const fmtMark = (m: number | null, dp = 1) =>
